@@ -1,0 +1,7 @@
+D:/Projects/VS/NetHook/vcpkg_installed/vcpkg/pkgs/minhook_x64-windows/lib/minhook/minhook-config.cmake
+D:/Projects/VS/NetHook/vcpkg_installed/vcpkg/pkgs/minhook_x64-windows/lib/minhook/minhook-config-version.cmake
+D:/Projects/VS/NetHook/vcpkg_installed/vcpkg/pkgs/minhook_x64-windows/lib/minhook.x64.lib
+D:/Projects/VS/NetHook/vcpkg_installed/vcpkg/pkgs/minhook_x64-windows/bin/minhook.x64.dll
+D:/Projects/VS/NetHook/vcpkg_installed/vcpkg/pkgs/minhook_x64-windows/lib/minhook/minhook-targets.cmake
+D:/Projects/VS/NetHook/vcpkg_installed/vcpkg/pkgs/minhook_x64-windows/lib/minhook/minhook-targets-release.cmake
+D:/Projects/VS/NetHook/vcpkg_installed/vcpkg/pkgs/minhook_x64-windows/./include/MinHook.h
