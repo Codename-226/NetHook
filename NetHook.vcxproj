@@ -140,6 +140,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
+    <ClInclude Include="SRC\GUI\Window.h" />
     <ClInclude Include="SRC\Hooking\Hooks.h" />
     <ClInclude Include="SRC\Loggers\EventLog.h" />
     <ClInclude Include="pch.h" />

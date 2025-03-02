@@ -6,10 +6,6 @@ using namespace std;
 
 
 
-// Forward declaration for DetourMessageBoxW
-extern "C" int WINAPI DetourMessageBoxW(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType);
-
-
 
 void Main() {
     InitEventLog();

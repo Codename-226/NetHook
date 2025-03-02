@@ -5,7 +5,7 @@
 #include <sstream>
 
 
-char* buffer;
+char* buffer = 0;
 int pages_allocated = 1;
 const int page_size = 0xffff; // NOTE: should be large enough to fit the largest possible log entry (probably 128 bytes?)
 int used = 0;
