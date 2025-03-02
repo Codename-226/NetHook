@@ -7,17 +7,21 @@
 
 char* buffer;
 int pages_allocated = 1;
-const int page_size = 0xffff;
+const int page_size = 0xffff; // NOTE: should be large enough to fit the largest possible log entry (probably 128 bytes?)
 int used = 0;
 
 void InitEventLog() {
 	buffer = (char*)malloc(pages_allocated * page_size);
+	buffer[0] = '\0';
 }
 void ResizeEventLog() {
 	char* new_buffer = (char*)malloc((pages_allocated+1) * page_size);
 	memcpy(new_buffer, buffer, pages_allocated * page_size);
 
 	free(buffer);
+
+	buffer = new_buffer;
+	buffer[used] = '\0';
 	pages_allocated += 1;
 }
 inline void CheckAdjustEventLog(int size_of_next_content) {
