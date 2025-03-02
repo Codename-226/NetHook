@@ -25,6 +25,20 @@ inline void CheckAdjustEventLog(int size_of_next_content) {
 		ResizeEventLog();
 }
 
+
+void LogTimestamp() {
+	auto t = std::time(nullptr);
+	auto tm = *std::localtime(&t);
+	std::ostringstream oss;
+	oss << std::put_time(&tm, "%H:%M:%S");
+	auto str = oss.str();
+	memcpy(buffer + used, str.c_str(), 8);
+	buffer[used + 8] = ' ';
+	buffer[used + 9] = '|';
+	buffer[used + 10] = ' ';
+	used += 11;
+}
+
 class param_entry { public: const char* desc; uint64_t data; };
 void LogParamsEntry(const char* label, vector<param_entry> params) {
 	if (!buffer) return;
@@ -40,17 +54,9 @@ void LogParamsEntry(const char* label, vector<param_entry> params) {
 	CheckAdjustEventLog(total_size);
 
 	// write timestamp
-	auto t = std::time(nullptr);
-	auto tm = *std::localtime(&t);
-	std::ostringstream oss;
-	oss << std::put_time(&tm, "%H:%M:%S");
-	auto str = oss.str();
-	memcpy(buffer + used, str.c_str(), 8);
-	buffer[used + 8] = ' ';
-	buffer[used + 9] = '-';
-	buffer[used + 10] = ' ';
-	buffer[used + 11] = '[';
-	used += 12;
+	LogTimestamp();
+	buffer[used] = '[';
+	used += 1;
 
 	// write label
 	memcpy(buffer + used, label, label_size);
@@ -82,7 +88,25 @@ void LogParamsEntry(const char* label, vector<param_entry> params) {
 	// example output // HH:MM:SS - [LABEL]: param1 0000000000000001 param2 0000000000000002
 }
 
-void LogEntry() {
+void LogEntry(const char* entry) {
 	if (!buffer) return;
 
+	int label_size = (int)strlen(entry);
+	int total_size = 8 + 3 + label_size + 2; // newline + null terminator at the end
+
+	// verify buffer has enough room, if not then increase size
+	CheckAdjustEventLog(total_size);
+
+	// write timestamp
+	LogTimestamp();
+
+	// write label
+	memcpy(buffer + used, entry, label_size);
+	used += label_size;
+
+
+	// finish line
+	buffer[used]   = '\n';
+	buffer[used+1] = '\0';
+	used += 1;
 }
