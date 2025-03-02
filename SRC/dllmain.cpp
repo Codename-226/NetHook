@@ -1,5 +1,9 @@
-#include "pch.h"
+#include "../pch.h"
+using namespace std;
+#include <vector>
+#include "Loggers/EventLog.h"
 #include "Hooking/Hooks.h"
+
 
 
 // Forward declaration for DetourMessageBoxW
@@ -8,6 +12,7 @@ extern "C" int WINAPI DetourMessageBoxW(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCap
 
 
 void Main() {
+    InitEventLog();
     LoadHooks();
 }
 

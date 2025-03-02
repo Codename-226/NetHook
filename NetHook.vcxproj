@@ -140,11 +140,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
-    <ClInclude Include="Hooking\Hooks.h" />
+    <ClInclude Include="SRC\Hooking\Hooks.h" />
+    <ClInclude Include="SRC\Loggers\EventLog.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="vcpkg_installed\x64-windows\include\MinHook.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="SRC\dllmain.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
