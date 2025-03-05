@@ -13,6 +13,7 @@ public:
 	int used = 0;
 };
 LogData logs = {};
+extern "C" __declspec(dllexport) void* GetLogDataPtr() { return &logs; }
 
 void InitEventLog() {
 	logs.buffer = (char*)malloc(logs.pages_allocated * page_size);
