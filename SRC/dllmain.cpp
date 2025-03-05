@@ -4,6 +4,7 @@ using namespace std;
 #include "Loggers/EventLog.h"
 #include "Hooking/Hooks.h"
 
+#include "GUI/Window.h"
 
 
 
