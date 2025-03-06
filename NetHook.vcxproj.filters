@@ -78,6 +78,9 @@
     <ClInclude Include="SRC\shared_structs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SRC\Hooking\ParamHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">

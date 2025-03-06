@@ -49,7 +49,7 @@ void LogParamsEntry(const char* label, vector<param_entry> params) {
 
 	int label_size = (int)strlen(label);
 
-	int total_size = 8 + 3 + 1+label_size+1 + 1;
+	int total_size = 8 + 3 + label_size + 2;
 	for (int i = 0; i < params.size(); i++)
 		total_size += 1 + (int)strlen(params[i].desc) + 1 + 16;
 	total_size += 1 + 1; // newline character + null terminator
@@ -59,13 +59,11 @@ void LogParamsEntry(const char* label, vector<param_entry> params) {
 
 	// write timestamp
 	LogTimestamp();
-	logs.buffer[logs.used] = '[';
-	logs.used += 1;
 
 	// write label
 	memcpy(logs.buffer + logs.used, label, label_size);
-	logs.buffer[logs.used + label_size    ] = ']';
-	logs.buffer[logs.used + label_size + 1] = ':';
+	logs.buffer[logs.used + label_size    ] = ' ';
+	logs.buffer[logs.used + label_size + 1] = '-';
 	logs.used += label_size + 2;
 
 	// write params
