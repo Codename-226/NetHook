@@ -37,7 +37,8 @@ inline void CheckAdjustEventLog(int size_of_next_content) {
 
 void LogTimestamp() {
 	auto t = std::time(nullptr);
-	auto tm = *std::localtime(&t);
+	tm tm = {};
+	localtime_s(&tm, &t);
 	std::ostringstream oss;
 	oss << std::put_time(&tm, "%H:%M:%S");
 	auto str = oss.str();
@@ -77,14 +78,15 @@ void LogParamsEntry(const char* label, vector<param_entry> params) {
 	for (int i = 0; i < params.size(); i++) {
 		// write desc
 		logs.buffer[logs.used] = ' ';
+		logs.used += 1;
 		int desc_len = strlen(params[i].desc);
-		memcpy(logs.buffer + logs.used + 1, params[i].desc, desc_len);
-		logs.used += 1 + desc_len;
+		memcpy(logs.buffer + logs.used, params[i].desc, desc_len);
+		logs.used += desc_len;
 		logs.buffer[logs.used] = ' ';
 		logs.used += 1;
 
 		// write value
-		sprintf(logs.buffer + logs.used, "%016llx", params[i].data);
+		sprintf_s(logs.buffer + logs.used, 17, "%016llx", params[i].data);
 		logs.used += 16;
 	}
 

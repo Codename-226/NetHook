@@ -30,7 +30,25 @@
     <ClInclude Include="SRC\Loggers\EventLog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="vcpkg_installed\x64-windows\include\MinHook.h">
+    <ClInclude Include="MinHook\trampoline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MinHook\hde\hde64.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MinHook\hde\pstdint.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MinHook\hde\table32.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MinHook\hde\table64.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MinHook\buffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MinHook\MinHook.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SRC\GUI\imgui\imstb_truetype.h">
@@ -63,6 +81,21 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SRC\dllmain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MinHook\hde\hde32.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MinHook\hde\hde64.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MinHook\buffer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MinHook\hook.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MinHook\trampoline.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SRC\GUI\imgui\imgui.cpp">

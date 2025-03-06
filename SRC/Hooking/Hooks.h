@@ -1,23 +1,25 @@
 #pragma once
+#include "../MinHook/MinHook.h"
 #include <winsock2.h>
-#include "../vcpkg_installed/x64-windows/include/MinHook.h"
+#include <ws2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
 
 
 template <typename T>
 inline bool HookMacro(LPVOID src_func, LPVOID override_func, T** src_func_call_ptr ) {
     // Create a hook in disabled state.
-    if (MH_CreateHook(src_func, override_func, reinterpret_cast<LPVOID*>(&src_func_call_ptr)) != MH_OK) 
-        return 0;
+    if (MH_CreateHook(src_func, override_func, (void**)(src_func_call_ptr)) != MH_OK) 
+        return false;
     if (MH_EnableHook(src_func) != MH_OK)
-        return 0;
+        return false;
     return true;
 }
 
 typedef int (WSAAPI* send_func)(SOCKET, const char*, int, int);
 send_func send_func_ptr = NULL;
-int WSAAPI hooked_send(_In_ SOCKET s, _In_reads_bytes_(len) const char FAR* buf, _In_ int len, _In_ int flags) {
+int WSAAPI hooked_send(SOCKET s, const char* buf, int len, int flags) {
 
-
+    LogEntry("send hook triggered");
 
     return send_func_ptr(s, buf, len, flags);
 }
@@ -26,13 +28,16 @@ int WSAAPI hooked_send(_In_ SOCKET s, _In_reads_bytes_(len) const char FAR* buf,
 
 
 bool LoadHooks() {
-    if (MH_Initialize() != MH_OK) return 0;
+    if (MH_Initialize() != MH_OK) return false;
 
-    if (!HookMacro(&send, &hooked_send, &send_func_ptr)) return 0;
+    if (!HookMacro(&send, &hooked_send, &send_func_ptr)) return false;
+
+    LogParamsEntry("send func hooked", { param_entry{"prev_address", (uint64_t)&send}, param_entry{"override_address", (uint64_t)&hooked_send}, param_entry{"trampoline_address", (uint64_t)&send_func_ptr} });
+
 
     return true;
 }
 bool UnloadHooks() {
 
-    MH_Uninitialize();
+    return MH_Uninitialize();
 }

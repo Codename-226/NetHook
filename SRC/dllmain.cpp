@@ -13,7 +13,8 @@ void Main() {
     InitEventLog();
     LoadHooks();
 
-    std::thread t1(injected_window_main);
+    //std::thread t1(injected_window_main);
+    LogEntry("Finished Init");
 }
 
 
@@ -22,12 +23,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 
     switch (ul_reason_for_call){
     case DLL_PROCESS_ATTACH:
+        LogEntry("Process Attach");
         Main();
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
         break;
     case DLL_PROCESS_DETACH:
+        LogEntry("Process Detach");
         UnloadHooks();
         break;
     }

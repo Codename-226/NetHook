@@ -1,4 +1,3 @@
-#pragma once
 
 // Dear ImGui: standalone example application for DirectX 11
 
@@ -8,10 +7,14 @@
 // - Documentation        https://dearimgui.com/docs (same as your local docs/ folder).
 // - Introduction, links and more at the top of imgui.cpp
 
+#include <d3d11_1.h>
+#pragma comment(lib, "d3d11.lib")
+#include <d3dcompiler.h>
+#pragma comment(lib, "d3dcompiler.lib")
+
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_win32.h"
 #include "imgui/imgui_impl_dx11.h"
-#include <d3d11.h>
 #include <tchar.h>
 
 // Data
