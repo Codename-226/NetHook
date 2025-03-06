@@ -159,6 +159,7 @@
     <ClInclude Include="SRC\Hooking\Hooks.h" />
     <ClInclude Include="SRC\Loggers\EventLog.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="SRC\shared_structs.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MinHook\buffer.c" />
