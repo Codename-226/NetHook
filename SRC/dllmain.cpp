@@ -8,12 +8,11 @@ using namespace std;
 
 #include <thread>
 
-
 void Main() {
     InitEventLog();
     LoadHooks();
 
-    //std::thread t1(injected_window_main);
+    std::thread(injected_window_main).detach();
     LogEntry("Finished Init");
 }
 
