@@ -1,5 +1,5 @@
 #pragma once
-const int page_size = 0xffff; // NOTE: should be large enough to fit the largest possible log entry (probably 128 bytes?)
+const int page_size = 0x0fffff; // NOTE: should be large enough to fit the largest possible log entry (probably 128 bytes?)
 class LogData {
 public:
 	char* buffer = 0;

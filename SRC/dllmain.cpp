@@ -1,7 +1,15 @@
 #include "../pch.h"
 using namespace std;
 #include <vector>
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
+
+
 #include "Loggers/EventLog.h"
+#include "Loggers/SocketLog.h"
+#include "Loggers/ThroughputLog.h"
 #include "Hooking/Hooks.h"
 
 #include "GUI/Window.h"

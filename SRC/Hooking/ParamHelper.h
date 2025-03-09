@@ -23,6 +23,7 @@ unsigned long long flip_longlong(unsigned long long input) {
 
 uint64_t put_data_into_num(const char* data, int data_length) {
     if (data_length <= 0) return 0;
+    if (!data) return 0;
 
     
     //if (data_length == 1) {

@@ -152,6 +152,8 @@
     <ClInclude Include="SRC\GUI\imgui\imgui_impl_dx11.h" />
     <ClInclude Include="SRC\GUI\imgui\imgui_impl_win32.h" />
     <ClInclude Include="SRC\GUI\imgui\imgui_internal.h" />
+    <ClInclude Include="SRC\GUI\imgui\implot.h" />
+    <ClInclude Include="SRC\GUI\imgui\implot_internal.h" />
     <ClInclude Include="SRC\GUI\imgui\imstb_rectpack.h" />
     <ClInclude Include="SRC\GUI\imgui\imstb_textedit.h" />
     <ClInclude Include="SRC\GUI\imgui\imstb_truetype.h" />
@@ -160,6 +162,8 @@
     <ClInclude Include="SRC\Hooking\ParamHelper.h" />
     <ClInclude Include="SRC\Loggers\EventLog.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="SRC\Loggers\ThroughputLog.h" />
+    <ClInclude Include="SRC\Loggers\SocketLog.h" />
     <ClInclude Include="SRC\shared_structs.h" />
   </ItemGroup>
   <ItemGroup>
@@ -182,6 +186,9 @@
     <ClCompile Include="SRC\GUI\imgui\imgui_impl_win32.cpp" />
     <ClCompile Include="SRC\GUI\imgui\imgui_tables.cpp" />
     <ClCompile Include="SRC\GUI\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="SRC\GUI\imgui\implot.cpp" />
+    <ClCompile Include="SRC\GUI\imgui\implot_demo.cpp" />
+    <ClCompile Include="SRC\GUI\imgui\implot_items.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

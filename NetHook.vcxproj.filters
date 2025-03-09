@@ -81,6 +81,18 @@
     <ClInclude Include="SRC\Hooking\ParamHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SRC\GUI\imgui\implot.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SRC\GUI\imgui\implot_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SRC\Loggers\SocketLog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SRC\Loggers\ThroughputLog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -123,6 +135,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SRC\GUI\imgui\imgui_widgets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SRC\GUI\imgui\implot_items.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SRC\GUI\imgui\implot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SRC\GUI\imgui\implot_demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
