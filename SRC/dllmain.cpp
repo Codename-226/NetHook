@@ -1,15 +1,17 @@
 #include "../pch.h"
-using namespace std;
-#include <vector>
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
 
+using namespace std;
+#include <vector>
+#include <map>
+#include <unordered_map>
 
 #include "Loggers/EventLog.h"
+#include "Loggers/PerformanceLog.h"
 #include "Loggers/SocketLog.h"
-#include "Loggers/ThroughputLog.h"
 #include "Hooking/Hooks.h"
 
 #include "GUI/Window.h"

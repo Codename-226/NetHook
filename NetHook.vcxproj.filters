@@ -90,7 +90,7 @@
     <ClInclude Include="SRC\Loggers\SocketLog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SRC\Loggers\ThroughputLog.h">
+    <ClInclude Include="SRC\Loggers\PerformanceLog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

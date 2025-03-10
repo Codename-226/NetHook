@@ -21,7 +21,6 @@ send_func send_func_ptr = NULL;
 int WSAAPI hooked_send(SOCKET s, const char* buf, int len, int flags) {
     LogParamsEntry("send()", { 
         param_entry{"socket", (uint64_t)s},
-        //param_entry{"flags", (uint64_t)flags},
         param_entry{"len", (uint64_t)len},
         param_entry{"|", put_data_into_num(buf, len)},
         param_entry{"-", put_data_into_num(buf+8, len-8)},
@@ -36,7 +35,6 @@ sendto_func sendto_func_ptr = NULL;
 int hooked_sendto(SOCKET s, const char* buf, int len, int flags, const sockaddr* to, int tolen) {
     LogParamsEntry("sendto()", {
         param_entry{"socket", (uint64_t)s},
-        //param_entry{"flags", (uint64_t)flags},
         param_entry{"len", (uint64_t)len},
         param_entry{"addr_len", (uint64_t)tolen},
         param_entry{"|", put_data_into_num((char*)to, tolen)},
@@ -48,31 +46,12 @@ int hooked_sendto(SOCKET s, const char* buf, int len, int flags, const sockaddr*
     return sendto_func_ptr(s, buf, len, flags, to, tolen);
 }
 
-typedef int (WSAAPI* sendto_func)(SOCKET s, const char* buf, int len, int flags, const sockaddr* to, int tolen);
-sendto_func sendto_func_ptr = NULL;
-int hooked_sendto(SOCKET s, const char* buf, int len, int flags, const sockaddr* to, int tolen) {
-    LogParamsEntry("sendto()", {
-        param_entry{"socket", (uint64_t)s},
-        //param_entry{"flags", (uint64_t)flags},
-        param_entry{"len", (uint64_t)len},
-        param_entry{"addr_len", (uint64_t)tolen},
-        param_entry{"|", put_data_into_num((char*)to, tolen)},
-        param_entry{"|", put_data_into_num(buf, len)},
-        param_entry{"-", put_data_into_num(buf + 8, len - 8)},
-        param_entry{"-", put_data_into_num(buf + 16, len - 16)},
-        });
-
-    return sendto_func_ptr(s, buf, len, flags, to, tolen);
-}
-
-
 typedef int (WSAAPI* WSAsend_func)(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesSent, DWORD dwFlags, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
 WSAsend_func WSAsend_func_ptr = NULL;
 int hooked_WSAsend(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesSent, DWORD dwFlags, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine) {
     if (dwBufferCount > 0)
         LogParamsEntry("WSAsend()", {
             param_entry{"socket", (uint64_t)s},
-            //param_entry{"flags", (uint64_t)flags},
             param_entry{"buffers", (uint64_t)dwBufferCount},
             param_entry{"len", (uint64_t)lpBuffers[0].len},
             param_entry{"|", put_data_into_num(lpBuffers[0].buf, lpBuffers[0].len)},
@@ -82,11 +61,12 @@ int hooked_WSAsend(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lp
     else
         LogParamsEntry("WSAsend()", {
             param_entry{"socket", (uint64_t)s},
-            //param_entry{"flags", (uint64_t)flags},
             param_entry{"buffers", (uint64_t)dwBufferCount},
-            });
+        });
 
-    return WSAsend_func_ptr(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpOverlapped, lpCompletionRoutine);
+    auto var = WSAsend_func_ptr(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpOverlapped, lpCompletionRoutine);
+
+    return var;
 }
 
 typedef int (WSAAPI* WSAsendto_func)(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesSent, DWORD dwFlags, const sockaddr* lpTo, int iTolen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
@@ -96,7 +76,6 @@ int hooked_WSAsendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD 
     if (dwBufferCount > 0)
         LogParamsEntry("WSAsendto()", {
             param_entry{"socket", (uint64_t)s},
-            //param_entry{"flags", (uint64_t)flags},
             param_entry{"buffers", (uint64_t)dwBufferCount},
             param_entry{"len", (uint64_t)lpBuffers[0].len},
             param_entry{"addr_len", (uint64_t)iTolen},
@@ -108,15 +87,15 @@ int hooked_WSAsendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD 
     else
         LogParamsEntry("WSAsendto()", {
             param_entry{"socket", (uint64_t)s},
-            //param_entry{"flags", (uint64_t)flags},
             param_entry{"buffers", (uint64_t)dwBufferCount},
             param_entry{"addr_len", (uint64_t)iTolen},
             param_entry{"|", put_data_into_num((char*)lpTo, iTolen)},
         });
 
-    return WSAsendto_func_ptr(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpTo, iTolen, lpOverlapped, lpCompletionRoutine);
-}
+    auto var = WSAsendto_func_ptr(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpTo, iTolen, lpOverlapped, lpCompletionRoutine);
 
+    return var;
+}
 
 typedef int (WSAAPI* WSAsendmsg_func)(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberOfBytesSent, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
 WSAsendmsg_func WSAsendmsg_func_ptr = NULL;
@@ -124,11 +103,13 @@ int hooked_WSAsendmsg(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberO
 
     LogParamsEntry("WSAsendto()", {
         param_entry{"socket", (uint64_t)s},
-        //param_entry{"flags", (uint64_t)flags},
     });
 
-    return WSAsendmsg_func_ptr(s, lpMsg, dwFlags, lpNumberOfBytesSent, lpOverlapped, lpCompletionRoutine);
+    auto var = WSAsendmsg_func_ptr(s, lpMsg, dwFlags, lpNumberOfBytesSent, lpOverlapped, lpCompletionRoutine);
+
+    return var;
 }
+
 
 
 bool LoadHooks() {

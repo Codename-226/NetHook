@@ -162,7 +162,7 @@
     <ClInclude Include="SRC\Hooking\ParamHelper.h" />
     <ClInclude Include="SRC\Loggers\EventLog.h" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="SRC\Loggers\ThroughputLog.h" />
+    <ClInclude Include="SRC\Loggers\PerformanceLog.h" />
     <ClInclude Include="SRC\Loggers\SocketLog.h" />
     <ClInclude Include="SRC\shared_structs.h" />
   </ItemGroup>
