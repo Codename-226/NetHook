@@ -1,7 +1,6 @@
 #pragma once
 
 #include <chrono>
-#include <WinSock2.h>
 long long nanoseconds() {
 	auto now = std::chrono::high_resolution_clock::now();
 	return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
@@ -42,54 +41,6 @@ enum socket_state {
 	s_open,
 	s_unknown,
 };
-
-socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const char* label, SocketLogs** output_container) {
-
-	SocketLogs* log_container = 0;
-	// find or create socket log struct
-	auto it = logged_sockets.find(s);
-	if (it != logged_sockets.end()) {
-		log_container = it->second;
-	} else {
-		log_malloc(sizeof(SocketLogs));
-		log_container = new SocketLogs();
-		log_container->s = s;
-		logged_sockets[s] = log_container;
-	}
-
-	// create log event stuff
-	log_malloc(sizeof(socket_log_entry));
-	socket_log_entry* new_socket_event = new socket_log_entry();
-	new_socket_event->type = type;
-	new_socket_event->name = label;
-	new_socket_event->timestamp = nanoseconds();
-	new_socket_event->callstack = callstack();
-	switch (type) {
-	case t_send:
-	case t_send_to:
-	case t_wsa_send:
-	case t_wsa_send_to:
-	case t_wsa_send_msg:
-		new_socket_event->category = c_send;
-		break;
-	case t_recv:
-	case t_recv_from:
-	case t_wsa_recv:
-	case t_wsa_recv_from:
-		new_socket_event->category = c_recieve;
-		break;
-	}
-	// append
-	log_container->events.push_back(new_socket_event);
-
-	// output container if requested
-	if (output_container) *output_container = log_container;
-
-	// return data ptr for us to fill in externally
-	return &new_socket_event->data;
-}
-
-
 
 class socentry_send {
 public:
@@ -152,10 +103,16 @@ public:
 
 const int io_history_count = 120;
 class IOLog {
+public:
 	float data[io_history_count] = {0};
 	long long last_update_timestamp = 0;
+	long long total = 0;
+	int total_logs = 0;
 
-	void log(float value) {
+	void log(long long value) {
+		total += value;
+		total_logs++;
+
 		long long current_timestamp = seconds();
 		long long steps_since_last_update = current_timestamp - last_update_timestamp;
 		if (steps_since_last_update > io_history_count) steps_since_last_update = io_history_count;
@@ -202,6 +159,57 @@ public:
 };
 
 
+
+
 unordered_map<SOCKET, SocketLogs*> logged_sockets = {};
 IOLog global_io_send_log = {};
 IOLog global_io_recv_log = {};
+
+
+socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const char* label, SocketLogs** output_container) {
+
+	SocketLogs* log_container = 0;
+	// find or create socket log struct
+	auto it = logged_sockets.find(s);
+	if (it != logged_sockets.end()) {
+		log_container = it->second;
+	} else {
+		log_malloc(sizeof(SocketLogs));
+		log_container = new SocketLogs();
+		log_container->s = s;
+		logged_sockets[s] = log_container;
+	}
+
+	// create log event stuff
+	log_malloc(sizeof(socket_log_entry));
+    
+	socket_log_entry* new_socket_event = (socket_log_entry*)malloc(sizeof(socket_log_entry));
+	memset(new_socket_event, 0, sizeof(socket_log_entry));
+	new_socket_event->type = type;
+	new_socket_event->name = label;
+	new_socket_event->timestamp = nanoseconds();
+	new_socket_event->callstack = callstack();
+	switch (type) {
+	case t_send:
+	case t_send_to:
+	case t_wsa_send:
+	case t_wsa_send_to:
+	case t_wsa_send_msg:
+		new_socket_event->category = c_send;
+		break;
+	case t_recv:
+	case t_recv_from:
+	case t_wsa_recv:
+	case t_wsa_recv_from:
+		new_socket_event->category = c_recieve;
+		break;
+	}
+	// append
+	log_container->events.push_back(new_socket_event);
+
+	// output container if requested
+	if (output_container) *output_container = log_container;
+
+	// return data ptr for us to fill in externally
+	return &new_socket_event->data;
+}

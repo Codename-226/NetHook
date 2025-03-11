@@ -71,22 +71,6 @@ int injected_window_main()
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
-    // - If the file cannot be loaded, the function will return a nullptr. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
-    // - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame below will call.
-    // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher quality font rendering.
-    // - Read 'docs/FONTS.md' for more instructions and details.
-    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
-    //io.Fonts->AddFontDefault();
-    //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-    //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
-    //IM_ASSERT(font != nullptr);
-
     // Our state
     bool show_demo_window = true;
     bool show_plot_demo_window = true;
@@ -95,13 +79,11 @@ int injected_window_main()
 
     // Main loop
     bool done = false;
-    while (!done)
-    {
+    while (!done){
         // Poll and handle messages (inputs, window resize, etc.)
         // See the WndProc() function below for our to dispatch events to the Win32 backend.
         MSG msg;
-        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
-        {
+        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)){
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
             if (msg.message == WM_QUIT)
@@ -111,16 +93,14 @@ int injected_window_main()
             break;
 
         // Handle window being minimized or screen locked
-        if (g_SwapChainOccluded && g_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED)
-        {
+        if (g_SwapChainOccluded && g_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED){
             ::Sleep(10);
             continue;
         }
         g_SwapChainOccluded = false;
 
         // Handle window resize (we don't resize directly in the WM_SIZE handler)
-        if (g_ResizeWidth != 0 && g_ResizeHeight != 0)
-        {
+        if (g_ResizeWidth != 0 && g_ResizeHeight != 0){
             CleanupRenderTarget();
             g_pSwapChain->ResizeBuffers(0, g_ResizeWidth, g_ResizeHeight, DXGI_FORMAT_UNKNOWN, 0);
             g_ResizeWidth = g_ResizeHeight = 0;
@@ -132,41 +112,133 @@ int injected_window_main()
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+        ImGui::Begin("Main", nullptr, ImGuiWindowFlags_MenuBar);
+        if (ImGui::BeginMenuBar()) {
+            if (ImGui::BeginMenu("Windows")) {
+                ImGui::MenuItem("ImGui Demo", nullptr, &show_demo_window);
+                ImGui::MenuItem("ImPlot Demo", nullptr, &show_plot_demo_window);
+                ImGui::MenuItem("Perf Window", nullptr, &show_another_window);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenuBar();
+        }
+
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
         if (show_plot_demo_window)
             ImPlot::ShowDemoWindow(&show_plot_demo_window);
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+
+
         {
-            static float f = 0.0f;
-            static int counter = 0;
 
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+            float send_data[io_history_count] = {0};
+            float recv_data[io_history_count] = {0};
+            auto timestamp = seconds();
+            global_io_send_log.add_to(send_data, timestamp); 
+            global_io_recv_log.add_to(recv_data, timestamp); 
 
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
+            {   // show send stats
+                float send_average = (send_data[io_history_count-2] + send_data[io_history_count-3] + send_data[io_history_count-4]) / 3.0f;
+                if (send_average < 1000)
+                     ImGui::Text("Send: %.1fb/s", send_average);
+                else if (send_average < 1000000)
+                     ImGui::Text("Send: %.1fkb/s", send_average / 1000.0f);
+                else ImGui::Text("Send: %.1fmb/s", send_average / 1000000.0f);
+                ImGui::SameLine();
+                if (global_io_send_log.total < 1000)
+                     ImGui::Text("total: %db", global_io_send_log.total);
+                else if (global_io_send_log.total < 1000000)
+                     ImGui::Text("total: %.1fkb", ((float)global_io_send_log.total) / 1000.0f);
+                else ImGui::Text("total: %.1fmb", ((float)global_io_send_log.total) / 1000000.0f);
+            }
 
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+            {   // show send stats
+                float recv_average = (recv_data[io_history_count-2] + recv_data[io_history_count-3] + recv_data[io_history_count-4]) / 3.0f;
+                if (recv_average < 1000)
+                     ImGui::Text("Recv: %.1fb/s", recv_average);
+                else if (recv_average < 1000000)
+                     ImGui::Text("Recv: %.1fkb/s", recv_average / 1000.0f);
+                else ImGui::Text("Recv: %.1fmb/s", recv_average / 1000000.0f);
+                ImGui::SameLine();
+                if (global_io_recv_log.total < 1000)
+                     ImGui::Text("total: %db", global_io_recv_log.total);
+                else if (global_io_recv_log.total < 1000000)
+                     ImGui::Text("total: %.1fkb", ((float)global_io_recv_log.total) / 1000.0f);
+                else ImGui::Text("total: %.1fmb", ((float)global_io_recv_log.total) / 1000000.0f);
+            }
 
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
+
+
+            if (ImPlot::BeginPlot("IO", ImVec2(-1, 0), ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_NoMouseText | ImPlotFlags_NoInputs | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoFrame)) {
+                ImPlot::SetupAxes(0, 0, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines);
+                ImPlot::PlotLine("Send", send_data, io_history_count);
+                ImPlot::PlotLine("Recv", recv_data, io_history_count);
+                ImPlot::EndPlot();
+            }
+
+            ImGui::Text("Sockets: %d/%d", logged_sockets.size(), logged_sockets.size());
             ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
+            ImGui::Text("Packets sent: %d, recieved: %d", global_io_send_log.total_logs, global_io_recv_log.total_logs);
 
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            // Left
+            static long long selected_socket = 0;
+            {
+                ImGui::BeginChild("left pane", ImVec2(150, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+                for (const auto& pair : logged_sockets) {
+                    long long current_socket = (long long)pair.first;
+                    // create a widget that shows the name of the socket ID
+                    char label[128];
+                    sprintf_s(label, "Socket %d", current_socket, 128);
+                    if (ImGui::Selectable(label, selected_socket == current_socket))
+                        selected_socket = current_socket;
+                }
+                ImGui::EndChild();
+            }
+            ImGui::SameLine();
+
+            // Right
+            {
+                ImGui::BeginGroup();
+                ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
+                ImGui::Text("Socket: %d", selected_socket);
+                ImGui::Separator();
+                if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None))
+                {
+                    if (ImGui::BeginTabItem("Description"))
+                    {
+                        ImGui::TextWrapped("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ");
+                        ImGui::EndTabItem();
+                    }
+                    if (ImGui::BeginTabItem("Details"))
+                    {
+                        ImGui::Text("ID: 0123456789");
+                        ImGui::EndTabItem();
+                    }
+                    ImGui::EndTabBar();
+                }
+                ImGui::EndChild();
+                if (ImGui::Button("Revert")) {} 
+                ImGui::SameLine(); 
+                if (ImGui::Button("Save")) {} 
+                ImGui::EndGroup(); 
+            }
+
+            
+
             ImGui::End();
         }
 
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+        if (show_another_window){
+            ImGui::Begin("Performance data", &show_another_window);
             ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
+            int ram_rounded = ram_allocated;
+            if (ram_rounded < 1000) 
+                 ImGui::Text("Allocated Mem: %db", ram_rounded);
+            else if (ram_rounded < 1000000) 
+                 ImGui::Text("Allocated Mem: %dkb", ram_rounded/1000);
+            else ImGui::Text("Allocated Mem: %dmb", ram_rounded/1000000);
+            
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
         }
 
