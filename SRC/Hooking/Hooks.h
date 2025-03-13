@@ -29,6 +29,7 @@ int WSAAPI hooked_send(SOCKET s, const char* buf, int len, int flags) {
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_send, "send()", &log);
     log->send_log.log(len);
+    log->total_send_log.log(len);
     global_io_send_log.log(len);
     event->send.flags = flags;
     event->send.buffer = vector<char>(buf, buf + len);
@@ -52,6 +53,7 @@ int hooked_sendto(SOCKET s, const char* buf, int len, int flags, const sockaddr*
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_send_to, "sendto()", &log);
     log->sendto_log.log(len);
+    log->total_send_log.log(len);
     global_io_send_log.log(len);
     event->sendto.flags = flags;
     event->sendto.buffer = vector<char>(buf, buf + len);
@@ -89,6 +91,7 @@ int hooked_WSAsend(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lp
     for (int i = 0; i < dwBufferCount; i++) {
         event->wsasend.buffer.push_back(vector<char>(lpBuffers[i].buf, lpBuffers[i].buf + lpBuffers[i].len));
         log->wsasend_log.log(lpBuffers[i].len);
+        log->total_send_log.log(lpBuffers[i].len);
         global_io_send_log.log(lpBuffers[i].len);
         total_size += lpBuffers[i].len;
     }
@@ -134,6 +137,7 @@ int hooked_WSAsendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD 
     for (int i = 0; i < dwBufferCount; i++) {
         event->wsasendto.buffer.push_back(vector<char>(lpBuffers[i].buf, lpBuffers[i].buf + lpBuffers[i].len));
         log->wsasendto_log.log(lpBuffers[i].len);
+        log->total_send_log.log(lpBuffers[i].len);
         global_io_send_log.log(lpBuffers[i].len);
         total_size += lpBuffers[i].len;
     }
@@ -165,6 +169,7 @@ int hooked_WSAsendmsg(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberO
     for (int i = 0; i < lpMsg->dwBufferCount; i++) {
         event->wsasendmsg.buffer.push_back(vector<char>(lpMsg->lpBuffers[i].buf, lpMsg->lpBuffers[i].buf + lpMsg->lpBuffers[i].len));
         log->wsasendmsg_log.log(lpMsg->lpBuffers[i].len);
+        log->total_send_log.log(lpMsg->lpBuffers[i].len);
         global_io_send_log.log(lpMsg->lpBuffers[i].len);
         total_size += lpMsg->lpBuffers[i].len;
     }

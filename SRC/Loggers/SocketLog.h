@@ -7,8 +7,18 @@ long long nanoseconds() {
 }
 long long seconds() {
 	auto now = std::chrono::system_clock::now();
-	// Convert time_point to time_t, which represents the time in seconds since epoch
 	return (long long)std::chrono::system_clock::to_time_t(now);
+}
+long long IO_history_timestamp() {
+	// currently once per second
+	//auto now = std::chrono::system_clock::now();
+	//return (long long)std::chrono::system_clock::to_time_t(now);
+	// 10 times a second
+	auto now = std::chrono::system_clock::now();
+	return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() / 100;
+	// ???????? times a second
+	//auto now = std::chrono::high_resolution_clock::now();
+	//return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
 }
 
 inline char* callstack() {
@@ -109,11 +119,15 @@ public:
 	long long total = 0;
 	int total_logs = 0;
 
+	// only accessed by the UI window, to cache stuff for display
+	float cached_data[io_history_count] = { 0 };
+	long long cached_timestamp = 0;
+
 	void log(long long value) {
 		total += value;
 		total_logs++;
 
-		long long current_timestamp = seconds();
+		long long current_timestamp = IO_history_timestamp();
 		long long steps_since_last_update = current_timestamp - last_update_timestamp;
 		if (steps_since_last_update > io_history_count) steps_since_last_update = io_history_count;
 
@@ -132,25 +146,57 @@ public:
 		data[io_history_count - 1] += value;
 
 	}
+	// NOTE: since the adding part isn't even used, we just copy
 	void add_to(float* output_buffer, long long timestamp) { // NOTE: size must = io_history_count // NOTE: this is called from other threads, so this is a readonly function
 		long long steps_since_last_update = timestamp - last_update_timestamp;
 
-		if (steps_since_last_update >= 0)
-			// shift all entries back by X amount
-			for (int i = steps_since_last_update; i < io_history_count; i++)
-				output_buffer[i] += data[i - steps_since_last_update];
-		else
-			// shift all entries back by X amount
-			for (int i = 0; i < io_history_count + steps_since_last_update; i++)
-				output_buffer[i-steps_since_last_update] += data[i];
+		// determine how many steps behind this buffer is
+		if (steps_since_last_update == 0)
+			memcpy(output_buffer, data, io_history_count);
+		else if (steps_since_last_update > 0) {
+			if (steps_since_last_update < io_history_count) {
+				memcpy(output_buffer, (char*)(data) + (steps_since_last_update*4), (io_history_count - steps_since_last_update) * 4);
+				memset((char*)(output_buffer) + ((io_history_count - steps_since_last_update)*4), 0, steps_since_last_update * 4);
+			} 
+			else memset(output_buffer, 0, io_history_count * 4);
+		}
+		// i hope that this isn't possible
+		else if (steps_since_last_update < 0) {
+			steps_since_last_update = abs(steps_since_last_update);
+			if (steps_since_last_update < io_history_count) {
+				memcpy((char*)(output_buffer) + (steps_since_last_update*4), data, (io_history_count - steps_since_last_update) * 4);
+				memset(output_buffer, 0, steps_since_last_update * 4);
+			}
+			else memset(output_buffer, 0, io_history_count * 4);
+		}
+
+
+		//if (steps_since_last_update >= 0)
+		//	// shift all entries back by X amount
+		//	for (int i = steps_since_last_update; i < io_history_count; i++)
+		//		output_buffer[i-steps_since_last_update] = data[i];
+		//else
+		//	// shift all entries back by X amount
+		//	for (int i = 0; i < io_history_count + steps_since_last_update; i++)
+		//		output_buffer[i-steps_since_last_update] = data[i];
+	}
+	void refresh_cache(long long timestamp) {
+		if (timestamp == cached_timestamp) return;
+
+		cached_timestamp = timestamp;
+		add_to(cached_data, cached_timestamp);
 	}
 };
 
 class SocketLogs {
 public:
 	SOCKET s = 0;
+	char cusotm_label[256] = {0};
 	socket_state state = s_unknown;
 	vector<socket_log_entry*> events = {};
+	IOLog total_send_log = {};
+	IOLog total_recv_log = {};
+
 	IOLog send_log = {};
 	IOLog sendto_log = {};
 	IOLog wsasend_log = {};

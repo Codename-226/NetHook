@@ -67,6 +67,18 @@ int injected_window_main()
     ImGui::StyleColorsDark();
     //ImGui::StyleColorsLight();
 
+    // implot styles
+    //ImPlotStyle& style = ImPlot::GetStyle();
+    //ImPlotStyle savedStyle = style;
+    //style.PlotPadding = ImVec2(0, 0);
+    //style.LabelPadding = ImVec2(0, 0);
+    //style.LegendPadding = ImVec2(0, 0);
+    //style.FitPadding = ImVec2(0, 0);
+    //style.PlotBorderSize = 0;
+    //style.Colors[ImPlotCol_PlotBg] = ImVec4(0, 0, 0, 0);
+
+
+
     // Setup Platform/Renderer backends
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
@@ -130,12 +142,12 @@ int injected_window_main()
 
 
         {
-
-            float send_data[io_history_count] = {0};
-            float recv_data[io_history_count] = {0};
-            auto timestamp = seconds();
-            global_io_send_log.add_to(send_data, timestamp); 
-            global_io_recv_log.add_to(recv_data, timestamp); 
+            // refresh all the main display caches
+            long long timestamp = IO_history_timestamp();
+            global_io_send_log.refresh_cache(timestamp);
+            global_io_recv_log.refresh_cache(timestamp);
+            float* send_data = global_io_send_log.cached_data;
+            float* recv_data = global_io_recv_log.cached_data;
 
             {   // show send stats
                 float send_average = (send_data[io_history_count-2] + send_data[io_history_count-3] + send_data[io_history_count-4]) / 3.0f;
@@ -186,11 +198,36 @@ int injected_window_main()
                 ImGui::BeginChild("left pane", ImVec2(150, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
                 for (const auto& pair : logged_sockets) {
                     long long current_socket = (long long)pair.first;
+                    // refresh cache for our graph widget
+                    pair.second->total_send_log.refresh_cache(timestamp);
+                    pair.second->total_recv_log.refresh_cache(timestamp);
+
                     // create a widget that shows the name of the socket ID
-                    char label[128];
-                    sprintf_s(label, "Socket %d", current_socket, 128);
-                    if (ImGui::Selectable(label, selected_socket == current_socket))
+                    ImGui::PushID(current_socket);
+                    if (ImGui::Selectable("##selec", selected_socket == current_socket, 0, ImVec2(0, 40)))
                         selected_socket = current_socket;
+
+                    ImGui::SameLine();
+                    if (ImPlot::BeginPlot("IO", ImVec2(-1, 40), ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_NoMouseText | ImPlotFlags_NoInputs | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoFrame)) {
+                        ImPlot::SetupAxes(0, 0, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines);
+
+                        ImVec2 plotPos = ImPlot::GetPlotPos();
+                        ImVec2 plotSize = ImPlot::GetPlotSize();
+                        ImPlot::PlotLine("Send", pair.second->total_send_log.cached_data, io_history_count);
+                        ImPlot::PlotLine("Recv", pair.second->total_recv_log.cached_data, io_history_count);
+                        ImPlot::EndPlot();
+
+                        // Get the plot position and size
+                        ImVec2 originalCursorPos = ImGui::GetCursorPos();
+                        ImGui::SetCursorScreenPos(ImVec2(plotPos.x + 5, plotPos.y + 5));
+
+                        char label[128];
+                        sprintf_s(label, "Socket %d", current_socket);
+                        ImGui::Text(label);
+                        // Restore the original cursor position
+                        ImGui::SetCursorPos(originalCursorPos);
+                    }
+                    ImGui::PopID();
                 }
                 ImGui::EndChild();
             }
