@@ -33,6 +33,42 @@ void CreateRenderTarget();
 void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+
+void log_thing(const char* label, IOLog log, int id){   // show send stats
+    ImGui::PushID(id);
+    ImGui::Text(label, log.total);
+    ImGui::SameLine();
+    float recv_average = (log.data[io_history_count - 2] + log.data[io_history_count - 3] + log.data[io_history_count - 4]) / 3.0f;
+    if (recv_average < 1000)
+        ImGui::Text("%.1fb/s", recv_average);
+    else if (recv_average < 1000000)
+        ImGui::Text("%.1fkb/s", recv_average / 1000.0f);
+    else ImGui::Text("%.1fmb/s", recv_average / 1000000.0f);
+
+    ImGui::SameLine();
+    if (log.total < 1000)
+        ImGui::Text("total: %db", log.total);
+    else if (log.total < 1000000)
+        ImGui::Text("total: %.1fkb", ((float)log.total) / 1000.0f);
+    else ImGui::Text("total: %.1fmb", ((float)log.total) / 1000000.0f);
+
+    ImGui::SameLine();
+    if (log.cached_peak < 1000)
+        ImGui::Text("peak: %db", log.cached_peak);
+    else if (log.cached_peak < 1000000)
+        ImGui::Text("peak: %.1fkb", log.cached_peak / 1000.0f);
+    else ImGui::Text("peak: %.1fmb", log.cached_peak / 1000000.0f);
+
+    ImGui::SameLine();
+    if (log.cached_average < 1000)
+        ImGui::Text("peak: %db", log.cached_average);
+    else if (log.cached_average < 1000000)
+        ImGui::Text("peak: %.1fkb", log.cached_average / 1000.0f);
+    else ImGui::Text("peak: %.1fmb", log.cached_average / 1000000.0f);
+
+    ImGui::PopID();
+}
+
 // Main code
 int injected_window_main()
 {
@@ -149,36 +185,8 @@ int injected_window_main()
             float* send_data = global_io_send_log.cached_data;
             float* recv_data = global_io_recv_log.cached_data;
 
-            {   // show send stats
-                float send_average = (send_data[io_history_count-2] + send_data[io_history_count-3] + send_data[io_history_count-4]) / 3.0f;
-                if (send_average < 1000)
-                     ImGui::Text("Send: %.1fb/s", send_average);
-                else if (send_average < 1000000)
-                     ImGui::Text("Send: %.1fkb/s", send_average / 1000.0f);
-                else ImGui::Text("Send: %.1fmb/s", send_average / 1000000.0f);
-                ImGui::SameLine();
-                if (global_io_send_log.total < 1000)
-                     ImGui::Text("total: %db", global_io_send_log.total);
-                else if (global_io_send_log.total < 1000000)
-                     ImGui::Text("total: %.1fkb", ((float)global_io_send_log.total) / 1000.0f);
-                else ImGui::Text("total: %.1fmb", ((float)global_io_send_log.total) / 1000000.0f);
-            }
-
-            {   // show send stats
-                float recv_average = (recv_data[io_history_count-2] + recv_data[io_history_count-3] + recv_data[io_history_count-4]) / 3.0f;
-                if (recv_average < 1000)
-                     ImGui::Text("Recv: %.1fb/s", recv_average);
-                else if (recv_average < 1000000)
-                     ImGui::Text("Recv: %.1fkb/s", recv_average / 1000.0f);
-                else ImGui::Text("Recv: %.1fmb/s", recv_average / 1000000.0f);
-                ImGui::SameLine();
-                if (global_io_recv_log.total < 1000)
-                     ImGui::Text("total: %db", global_io_recv_log.total);
-                else if (global_io_recv_log.total < 1000000)
-                     ImGui::Text("total: %.1fkb", ((float)global_io_recv_log.total) / 1000.0f);
-                else ImGui::Text("total: %.1fmb", ((float)global_io_recv_log.total) / 1000000.0f);
-            }
-
+            log_thing("Send", global_io_send_log);
+            log_thing("Recv", global_io_recv_log);
 
 
             if (ImPlot::BeginPlot("IO", ImVec2(-1, 0), ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_NoMouseText | ImPlotFlags_NoInputs | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoFrame)) {

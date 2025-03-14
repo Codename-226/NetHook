@@ -122,6 +122,8 @@ public:
 	// only accessed by the UI window, to cache stuff for display
 	float cached_data[io_history_count] = { 0 };
 	long long cached_timestamp = 0;
+	float cached_peak = 0.0f;
+	float cached_average = 0.0f;
 
 	void log(long long value) {
 		total += value;
@@ -169,8 +171,16 @@ public:
 			}
 			else memset(output_buffer, 0, io_history_count * 4);
 		}
-
-
+		// regenerate cached evaluted stats
+		cached_peak = 0.0f;
+		cached_average = 0.0f;
+		for (int i = 0; i < io_history_count; i++) {
+			float current_val = cached_data[i];
+			cached_average += current_val;
+			if (cached_peak < current_val)
+				cached_peak = current_val;
+		}
+		cached_average /= io_history_count;
 		//if (steps_since_last_update >= 0)
 		//	// shift all entries back by X amount
 		//	for (int i = steps_since_last_update; i < io_history_count; i++)
