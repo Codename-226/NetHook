@@ -188,6 +188,32 @@ int hooked_WSAsendmsg(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberO
 
 
 
+
+
+typedef int (WSAAPI* recv_func)(SOCKET s, char* buf, int len, int flags);
+recv_func recv_func_ptr = NULL;
+int hooked_recv(SOCKET s, char* buf, int len, int flags) {
+    LogParamsEntry("recv()", { param_entry{"socket", (uint64_t)s}, });
+
+    auto len_recieved = recv_func_ptr(s, buf, len, flags);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent(s, t_recv, "recv()", &log);
+
+    event->recv.flags = flags;
+    event->recv.buffer = vector<char>(buf, buf + len_recieved);
+    log->recv_log.log(len_recieved);
+    log->total_send_log.log(len_recieved);
+    global_io_send_log.log(len_recieved);
+    log_malloc(len_recieved);
+
+
+    return len_recieved;
+}
+
+
+
+
 bool LoadHooks() {
     if (MH_Initialize() != MH_OK) return false;
 

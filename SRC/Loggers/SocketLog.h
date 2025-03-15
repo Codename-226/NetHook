@@ -88,6 +88,32 @@ public:
 	vector<char> control_buffer;
 	vector<char> to;
 };
+class socentry_recv {
+public:
+	int flags;
+	vector<char> buffer;
+};
+class socentry_recvfrom {
+public:
+	int flags;
+	vector<char> buffer;
+	vector<char> from;
+};
+class socentry_wsarecv {
+public:
+	int flags;
+	int bytes_sent;
+	void* completion_routine;
+	vector<vector<char>> buffer;
+};
+class socentry_wsarecvfrom {
+public:
+	int flags;
+	int bytes_recived;
+	void* completion_routine;
+	vector<vector<char>> buffer;
+	vector<char> from;
+};
 
 
 class socket_log_entry_data {
@@ -98,6 +124,11 @@ public:
 		socentry_wsasend wsasend;
 		socentry_wsasendto wsasendto;
 		socentry_wsasendmsg wsasendmsg;
+
+		socentry_recv recv;
+		socentry_recvfrom recvfrom;
+		socentry_wsarecv wsarecv;
+		socentry_wsarecvfrom wsarecvfrom;
 	};
 };
 
@@ -109,6 +140,7 @@ public:
 	long long timestamp;
 	char* callstack; // NOTE: has ownership over this char* // MUST CLEANUP
 	socket_log_entry_data data;
+	int error_code;
 };
 
 const int io_history_count = 120;
@@ -212,6 +244,11 @@ public:
 	IOLog wsasend_log = {};
 	IOLog wsasendto_log = {};
 	IOLog wsasendmsg_log = {};
+
+	IOLog recv_log = {};
+	IOLog recvfrom_log = {};
+	IOLog wsarecv_log = {};
+	IOLog wsarecvfrom_log = {};
 };
 
 
