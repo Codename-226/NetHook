@@ -195,16 +195,20 @@ recv_func recv_func_ptr = NULL;
 int hooked_recv(SOCKET s, char* buf, int len, int flags) {
     LogParamsEntry("recv()", { param_entry{"socket", (uint64_t)s}, });
 
-    auto len_recieved = recv_func_ptr(s, buf, len, flags);
 
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_recv, "recv()", &log);
 
+    auto len_recieved = recv_func_ptr(s, buf, len, flags);
+    if (len_recieved == SOCKET_ERROR) {
+        log->erro
+    }
+
     event->recv.flags = flags;
     event->recv.buffer = vector<char>(buf, buf + len_recieved);
     log->recv_log.log(len_recieved);
-    log->total_send_log.log(len_recieved);
-    global_io_send_log.log(len_recieved);
+    log->total_recv_log.log(len_recieved);
+    global_io_recv_log.log(len_recieved);
     log_malloc(len_recieved);
 
 
