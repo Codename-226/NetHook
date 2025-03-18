@@ -39,11 +39,6 @@ void log_thing(const char* label, IOLog log, int id){   // show send stats
     ImGui::Text(label, log.total);
     ImGui::SameLine();
     float recv_average = (log.data[io_history_count - 2] + log.data[io_history_count - 3] + log.data[io_history_count - 4]) / 3.0f;
-    if (recv_average < 1000)
-        ImGui::Text("%.1fb/s", recv_average);
-    else if (recv_average < 1000000)
-        ImGui::Text("%.1fkb/s", recv_average / 1000.0f);
-    else ImGui::Text("%.1fmb/s", recv_average / 1000000.0f);
 
     ImGui::SameLine();
     if (log.total < 1000)
@@ -61,10 +56,10 @@ void log_thing(const char* label, IOLog log, int id){   // show send stats
 
     ImGui::SameLine();
     if (log.cached_average < 1000)
-        ImGui::Text("peak: %db", log.cached_average);
+        ImGui::Text("average: %db", log.cached_average);
     else if (log.cached_average < 1000000)
-        ImGui::Text("peak: %.1fkb", log.cached_average / 1000.0f);
-    else ImGui::Text("peak: %.1fmb", log.cached_average / 1000000.0f);
+        ImGui::Text("average: %.1fkb", log.cached_average / 1000.0f);
+    else ImGui::Text("average: %.1fmb", log.cached_average / 1000000.0f);
 
     ImGui::PopID();
 }
@@ -104,14 +99,14 @@ int injected_window_main()
     //ImGui::StyleColorsLight();
 
     // implot styles
-    //ImPlotStyle& style = ImPlot::GetStyle();
-    //ImPlotStyle savedStyle = style;
-    //style.PlotPadding = ImVec2(0, 0);
-    //style.LabelPadding = ImVec2(0, 0);
-    //style.LegendPadding = ImVec2(0, 0);
-    //style.FitPadding = ImVec2(0, 0);
-    //style.PlotBorderSize = 0;
-    //style.Colors[ImPlotCol_PlotBg] = ImVec4(0, 0, 0, 0);
+    ImPlotStyle& style = ImPlot::GetStyle();
+    ImPlotStyle savedStyle = style;
+    style.PlotPadding = ImVec2(0, 0);
+    style.LabelPadding = ImVec2(0, 0);
+    style.LegendPadding = ImVec2(0, 0);
+    style.FitPadding = ImVec2(0, 0);
+    style.PlotBorderSize = 0;
+    style.Colors[ImPlotCol_PlotBg] = ImVec4(0, 0, 0, 0);
 
 
 
@@ -185,8 +180,8 @@ int injected_window_main()
             float* send_data = global_io_send_log.cached_data;
             float* recv_data = global_io_recv_log.cached_data;
 
-            log_thing("Send", global_io_send_log);
-            log_thing("Recv", global_io_recv_log);
+            log_thing("Send", global_io_send_log, 0);
+            log_thing("Recv", global_io_recv_log, 1);
 
 
             if (ImPlot::BeginPlot("IO", ImVec2(-1, 0), ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_NoMouseText | ImPlotFlags_NoInputs | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoFrame)) {

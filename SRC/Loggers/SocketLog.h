@@ -102,13 +102,15 @@ public:
 class socentry_wsarecv {
 public:
 	int flags;
-	int bytes_sent;
+	int out_flags;
+	int bytes_recived;
 	void* completion_routine;
 	vector<vector<char>> buffer;
 };
 class socentry_wsarecvfrom {
 public:
 	int flags;
+	int out_flags;
 	int bytes_recived;
 	void* completion_routine;
 	vector<vector<char>> buffer;
@@ -259,7 +261,7 @@ IOLog global_io_send_log = {};
 IOLog global_io_recv_log = {};
 
 
-socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const char* label, SocketLogs** output_container) {
+socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const char* label, SocketLogs** output_container, int error_code) {
 
 	SocketLogs* log_container = 0;
 	// find or create socket log struct
@@ -282,6 +284,7 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 	new_socket_event->name = label;
 	new_socket_event->timestamp = nanoseconds();
 	new_socket_event->callstack = callstack();
+	new_socket_event->error_code = error_code;
 	switch (type) {
 	case t_send:
 	case t_send_to:
