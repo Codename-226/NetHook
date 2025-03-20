@@ -158,6 +158,7 @@ public:
 	long long cached_timestamp = 0;
 	float cached_peak = 0.0f;
 	float cached_average = 0.0f;
+	float cached_total = 0.0f;
 
 	void log(long long value) {
 		total += value;
@@ -205,16 +206,6 @@ public:
 			}
 			else memset(output_buffer, 0, io_history_count * 4);
 		}
-		// regenerate cached evaluted stats
-		cached_peak = 0.0f;
-		cached_average = 0.0f;
-		for (int i = 0; i < io_history_count; i++) {
-			float current_val = cached_data[i];
-			cached_average += current_val;
-			if (cached_peak < current_val)
-				cached_peak = current_val;
-		}
-		cached_average /= io_history_count;
 		//if (steps_since_last_update >= 0)
 		//	// shift all entries back by X amount
 		//	for (int i = steps_since_last_update; i < io_history_count; i++)
@@ -229,6 +220,17 @@ public:
 
 		cached_timestamp = timestamp;
 		add_to(cached_data, cached_timestamp);
+
+		// regenerate cached evaluted stats
+		cached_peak = 0.0f;
+		cached_total = 0.0f;
+		for (int i = 0; i < io_history_count; i++) {
+			float current_val = cached_data[i];
+			cached_total += current_val;
+			if (cached_peak < current_val)
+				cached_peak = current_val;
+		}
+		cached_average = cached_total /(float)io_history_count;
 	}
 };
 
@@ -236,6 +238,7 @@ class SocketLogs {
 public:
 	SOCKET s = 0;
 	char cusotm_label[256] = {0};
+	long long timestamp = 0;
 	socket_state state = s_unknown;
 	vector<socket_log_entry*> events = {};
 	IOLog total_send_log = {};
@@ -271,6 +274,7 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 	} else {
 		log_malloc(sizeof(SocketLogs));
 		log_container = new SocketLogs();
+		log_container->timestamp = nanoseconds(); 
 		log_container->s = s;
 		logged_sockets[s] = log_container;
 	}

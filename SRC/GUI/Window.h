@@ -48,16 +48,16 @@ void log_thing(const char* label, IOLog log, int id){   // show send stats
     else ImGui::Text("total: %.1fmb", ((float)log.total) / 1000000.0f);
 
     ImGui::SameLine();
-    if (log.cached_peak < 1000)
-        ImGui::Text("peak: %db", log.cached_peak);
-    else if (log.cached_peak < 1000000)
+    if (log.cached_peak < 1000.0f)
+        ImGui::Text("peak: %.1fb", log.cached_peak);
+    else if (log.cached_peak < 1000000.0f)
         ImGui::Text("peak: %.1fkb", log.cached_peak / 1000.0f);
     else ImGui::Text("peak: %.1fmb", log.cached_peak / 1000000.0f);
 
     ImGui::SameLine();
-    if (log.cached_average < 1000)
-        ImGui::Text("average: %db", log.cached_average);
-    else if (log.cached_average < 1000000)
+    if (log.cached_average < 1000.0f)
+        ImGui::Text("average: %.1fb", log.cached_average);
+    else if (log.cached_average < 1000000.0f)
         ImGui::Text("average: %.1fkb", log.cached_average / 1000.0f);
     else ImGui::Text("average: %.1fmb", log.cached_average / 1000000.0f);
 
@@ -115,8 +115,8 @@ int injected_window_main()
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
     // Our state
-    bool show_demo_window = true;
-    bool show_plot_demo_window = true;
+    bool show_demo_window = false;
+    bool show_plot_demo_window = false;
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -155,7 +155,9 @@ int injected_window_main()
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Main", nullptr, ImGuiWindowFlags_MenuBar);
+        ImGui::SetNextWindowPos(ImVec2(0, 0)); // Top-left corner
+        ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize); // Full screen size
+        ImGui::Begin("Main", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
         if (ImGui::BeginMenuBar()) {
             if (ImGui::BeginMenu("Windows")) {
                 ImGui::MenuItem("ImGui Demo", nullptr, &show_demo_window);
