@@ -197,6 +197,23 @@ int injected_window_main()
             ImGui::SameLine();
             ImGui::Text("Packets sent: %d, recieved: %d", global_io_send_log.total_logs, global_io_recv_log.total_logs);
 
+
+            if (ImGui::Button("Toggle.."))
+                ImGui::OpenPopup("my_toggle_popup");
+            if (ImGui::BeginPopup("my_toggle_popup"))
+            {
+                for (int i = 0; i < IM_ARRAYSIZE(names); i++)
+                    ImGui::MenuItem(names[i], "", &toggles[i]);
+                if (ImGui::BeginMenu("Sub-menu"))
+                {
+                    ImGui::MenuItem("Click me");
+                    ImGui::EndMenu();
+                }
+
+                ImGui::Separator();
+            }
+
+
             // Left
             static long long selected_socket = 0;
             {
