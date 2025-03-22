@@ -54,14 +54,24 @@ void log_thing(const char* label, IOLog log, int id){   // show send stats
         ImGui::Text("peak: %.1fkb", log.cached_peak / 1000.0f);
     else ImGui::Text("peak: %.1fmb", log.cached_peak / 1000000.0f);
 
-    ImGui::SameLine();
-    if (log.cached_average < 1000.0f)
-        ImGui::Text("average: %.1fb", log.cached_average);
-    else if (log.cached_average < 1000000.0f)
-        ImGui::Text("average: %.1fkb", log.cached_average / 1000.0f);
-    else ImGui::Text("average: %.1fmb", log.cached_average / 1000000.0f);
+    //ImGui::SameLine();
+    //if (log.cached_average < 1000.0f)
+    //    ImGui::Text("average: %.1fb", log.cached_average);
+    //else if (log.cached_average < 1000000.0f)
+    //    ImGui::Text("average: %.1fkb", log.cached_average / 1000.0f);
+    //else ImGui::Text("average: %.1fmb", log.cached_average / 1000000.0f);
 
     ImGui::PopID();
+}
+static bool invert = false; // USED AS AN ADDITIONAL PARAM
+bool socket_comp_timestamp(         SocketLogs* a, SocketLogs* b) { return (a->timestamp < b->timestamp) ^ invert; }
+bool socket_comp_status(            SocketLogs* a, SocketLogs* b) { return (a->state < b->state) ^ invert; }
+bool socket_comp_activity_total(    SocketLogs* a, SocketLogs* b) { return ((a->total_recv_log.total + a->total_send_log.total) < (b->total_recv_log.total + b->total_send_log.total)) ^ invert; }
+bool socket_comp_activity_local(    SocketLogs* a, SocketLogs* b) { return ((a->total_recv_log.cached_total + a->total_send_log.cached_total) < (b->total_recv_log.cached_total + b->total_send_log.cached_total)) ^ invert; }
+bool socket_comp_activity_timestamp(SocketLogs* a, SocketLogs* b) { 
+    long long a_last_activity = a->total_recv_log.last_update_timestamp > a->total_send_log.last_update_timestamp ? a->total_recv_log.last_update_timestamp : a->total_send_log.last_update_timestamp;
+    long long b_last_activity = b->total_recv_log.last_update_timestamp > b->total_send_log.last_update_timestamp ? b->total_recv_log.last_update_timestamp : b->total_send_log.last_update_timestamp;
+    return (a_last_activity < b_last_activity) ^ invert;
 }
 
 // Main code
@@ -193,36 +203,91 @@ int injected_window_main()
                 ImPlot::EndPlot();
             }
 
-            ImGui::Text("Sockets: %d/%d", logged_sockets.size(), logged_sockets.size());
-            ImGui::SameLine();
-            ImGui::Text("Packets sent: %d, recieved: %d", global_io_send_log.total_logs, global_io_recv_log.total_logs);
 
 
-            if (ImGui::Button("Toggle.."))
-                ImGui::OpenPopup("my_toggle_popup");
-            if (ImGui::BeginPopup("my_toggle_popup"))
-            {
-                for (int i = 0; i < IM_ARRAYSIZE(names); i++)
-                    ImGui::MenuItem(names[i], "", &toggles[i]);
-                if (ImGui::BeginMenu("Sub-menu"))
-                {
-                    ImGui::MenuItem("Click me");
-                    ImGui::EndMenu();
-                }
+
+
+            static bool filter_by_has_recieve       = false;
+            static bool filter_by_has_send          = false;
+            static bool filter_by_status_open       = false;
+            static bool filter_by_status_unknown    = false;
+            static bool filter_by_status_closed     = false;
+
+            enum sort_type {
+                sort_by_timestamp, 
+                sort_by_status, 
+                sort_by_activity_total,
+                sort_by_activity_local,
+                sort_by_activity_timestamp,
+            };
+            static sort_type socket_sort_type = sort_by_timestamp;
+
+            if (ImGui::Button("Sockets.."))
+                ImGui::OpenPopup("display_popup");
+            if (ImGui::BeginPopup("display_popup")){
+                ImGui::MenuItem("must have activity: recv",     "", &filter_by_has_recieve);
+                ImGui::MenuItem("must have activity: send",     "", &filter_by_has_send);
+                ImGui::MenuItem("exclude status: open",        "", &filter_by_status_open);
+                ImGui::MenuItem("exclude status: unknown",     "", &filter_by_status_unknown);
+                ImGui::MenuItem("exclude status: closed",      "", &filter_by_status_closed);
+                
+                ImGui::Separator();
+                if (ImGui::MenuItem("sort: creation timestamp",     "", socket_sort_type == sort_by_timestamp         )) socket_sort_type = sort_by_timestamp;
+                if (ImGui::MenuItem("sort: status",                 "", socket_sort_type == sort_by_status            )) socket_sort_type = sort_by_status;
+                if (ImGui::MenuItem("sort: total activity",         "", socket_sort_type == sort_by_activity_total    )) socket_sort_type = sort_by_activity_total;
+                if (ImGui::MenuItem("sort: recent activity",        "", socket_sort_type == sort_by_activity_local    )) socket_sort_type = sort_by_activity_local;
+                if (ImGui::MenuItem("sort: last activity timestamp","", socket_sort_type == sort_by_activity_timestamp)) socket_sort_type = sort_by_activity_timestamp;
 
                 ImGui::Separator();
+                ImGui::MenuItem("sort: invert", "", &invert, true);
             }
+
+
+            // filter out bad sockets
+            vector<SocketLogs*> filtered_sockets = {};
+            for (const auto& pair : logged_sockets) {
+                if (filter_by_has_recieve && pair.second->total_recv_log.cached_total <= 0.0f) continue;
+                if (filter_by_has_send    && pair.second->total_send_log.cached_total <= 0.0f) continue;
+
+                if (filter_by_status_open    && pair.second->state == s_open)    continue;
+                if (filter_by_status_unknown && pair.second->state == s_unknown) continue;
+                if (filter_by_status_closed  && pair.second->state == s_closed)  continue;
+
+                filtered_sockets.push_back(pair.second);
+            }
+            // then sort sockets
+            switch (socket_sort_type) {
+            case sort_by_timestamp:
+                std::sort(filtered_sockets.begin(), filtered_sockets.end(), socket_comp_timestamp);
+                break;
+            case sort_by_status:
+                std::sort(filtered_sockets.begin(), filtered_sockets.end(), socket_comp_status);
+                break;
+            case sort_by_activity_total:
+                std::sort(filtered_sockets.begin(), filtered_sockets.end(), socket_comp_activity_total);
+                break;
+            case sort_by_activity_local:
+                std::sort(filtered_sockets.begin(), filtered_sockets.end(), socket_comp_activity_local);
+                break;
+            case sort_by_activity_timestamp:
+                std::sort(filtered_sockets.begin(), filtered_sockets.end(), socket_comp_activity_timestamp);
+                break;
+            }
+            ImGui::SameLine();
+            ImGui::Text("Sockets: %d/%d", filtered_sockets.size(), logged_sockets.size());
+            ImGui::SameLine();
+            ImGui::Text("Packets sent: %d, recieved: %d", global_io_send_log.total_logs, global_io_recv_log.total_logs);
 
 
             // Left
             static long long selected_socket = 0;
             {
                 ImGui::BeginChild("left pane", ImVec2(150, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
-                for (const auto& pair : logged_sockets) {
-                    long long current_socket = (long long)pair.first;
+                for (const auto& soc_logs : filtered_sockets) {
+                    long long current_socket = (long long)soc_logs->s;
                     // refresh cache for our graph widget
-                    pair.second->total_send_log.refresh_cache(timestamp);
-                    pair.second->total_recv_log.refresh_cache(timestamp);
+                    soc_logs->total_send_log.refresh_cache(timestamp);
+                    soc_logs->total_recv_log.refresh_cache(timestamp);
 
                     // create a widget that shows the name of the socket ID
                     ImGui::PushID(current_socket);
@@ -235,8 +300,8 @@ int injected_window_main()
 
                         ImVec2 plotPos = ImPlot::GetPlotPos();
                         ImVec2 plotSize = ImPlot::GetPlotSize();
-                        ImPlot::PlotLine("Send", pair.second->total_send_log.cached_data, io_history_count);
-                        ImPlot::PlotLine("Recv", pair.second->total_recv_log.cached_data, io_history_count);
+                        ImPlot::PlotLine("Send", soc_logs->total_send_log.cached_data, io_history_count);
+                        ImPlot::PlotLine("Recv", soc_logs->total_recv_log.cached_data, io_history_count);
                         ImPlot::EndPlot();
 
                         // Get the plot position and size

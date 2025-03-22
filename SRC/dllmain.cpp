@@ -8,6 +8,7 @@ using namespace std;
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <algorithm>
 
 #include "Loggers/EventLog.h"
 #include "Loggers/PerformanceLog.h"
