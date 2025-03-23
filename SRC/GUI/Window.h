@@ -34,6 +34,10 @@ void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
+// custom data
+static SocketLogs* selected_socket = 0;
+static SocketLogs* focused_socket = 0;
+
 void log_thing(const char* label, IOLog log, int id){   // show send stats
     ImGui::PushID(id);
     ImGui::Text(label, log.total);
@@ -79,50 +83,53 @@ int injected_window_main()
 {
     // Create application window
     //ImGui_ImplWin32_EnableDpiAwareness();
-    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
-    ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Dear ImGui DirectX11 Example", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
 
-    // Initialize Direct3D
-    if (!CreateDeviceD3D(hwnd))
+    // init window + imgui stuff
+    HWND hwnd; 
     {
-        CleanupDeviceD3D();
-        ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-        return 1;
+        WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
+        ::RegisterClassExW(&wc);
+        hwnd = ::CreateWindowW(wc.lpszClassName, L"Dear ImGui DirectX11 Example", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
+        // Initialize Direct3D
+        if (!CreateDeviceD3D(hwnd))
+        {
+            CleanupDeviceD3D();
+            ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
+            return 1;
+        }
+
+        // Show the window
+        ::ShowWindow(hwnd, SW_SHOWDEFAULT);
+        ::UpdateWindow(hwnd);
+
+        // Setup Dear ImGui context
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImPlot::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+
+        // Setup Dear ImGui style
+        ImGui::StyleColorsDark();
+        //ImGui::StyleColorsLight();
+
+        // implot styles
+        ImPlotStyle& style = ImPlot::GetStyle();
+        ImPlotStyle savedStyle = style;
+        style.PlotPadding = ImVec2(0, 0);
+        style.LabelPadding = ImVec2(0, 0);
+        style.LegendPadding = ImVec2(0, 0);
+        style.FitPadding = ImVec2(0, 0);
+        style.PlotBorderSize = 0;
+        style.Colors[ImPlotCol_PlotBg] = ImVec4(0, 0, 0, 0);
+
+        // Setup Platform/Renderer backends
+        ImGui_ImplWin32_Init(hwnd);
+        ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
     }
-
-    // Show the window
-    ::ShowWindow(hwnd, SW_SHOWDEFAULT);
-    ::UpdateWindow(hwnd);
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImPlot::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-
-    // implot styles
-    ImPlotStyle& style = ImPlot::GetStyle();
-    ImPlotStyle savedStyle = style;
-    style.PlotPadding = ImVec2(0, 0);
-    style.LabelPadding = ImVec2(0, 0);
-    style.LegendPadding = ImVec2(0, 0);
-    style.FitPadding = ImVec2(0, 0);
-    style.PlotBorderSize = 0;
-    style.Colors[ImPlotCol_PlotBg] = ImVec4(0, 0, 0, 0);
-
-
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplWin32_Init(hwnd);
-    ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+    ImGuiIO& io = ImGui::GetIO(); (void)io; 
 
     // Our state
     bool show_demo_window = false;
@@ -133,37 +140,39 @@ int injected_window_main()
     // Main loop
     bool done = false;
     while (!done){
-        // Poll and handle messages (inputs, window resize, etc.)
-        // See the WndProc() function below for our to dispatch events to the Win32 backend.
-        MSG msg;
-        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)){
-            ::TranslateMessage(&msg);
-            ::DispatchMessage(&msg);
-            if (msg.message == WM_QUIT)
-                done = true;
-        }
-        if (done)
-            break;
+        // update window
+        {
+            // Poll and handle messages (inputs, window resize, etc.)
+            // See the WndProc() function below for our to dispatch events to the Win32 backend.
+            MSG msg;
+            while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
+                ::TranslateMessage(&msg);
+                ::DispatchMessage(&msg);
+                if (msg.message == WM_QUIT)
+                    done = true;
+            }
+            if (done) break;
 
-        // Handle window being minimized or screen locked
-        if (g_SwapChainOccluded && g_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED){
-            ::Sleep(10);
-            continue;
-        }
-        g_SwapChainOccluded = false;
+            // Handle window being minimized or screen locked
+            if (g_SwapChainOccluded && g_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED) {
+                ::Sleep(10);
+                continue;
+            }
+            g_SwapChainOccluded = false;
 
-        // Handle window resize (we don't resize directly in the WM_SIZE handler)
-        if (g_ResizeWidth != 0 && g_ResizeHeight != 0){
-            CleanupRenderTarget();
-            g_pSwapChain->ResizeBuffers(0, g_ResizeWidth, g_ResizeHeight, DXGI_FORMAT_UNKNOWN, 0);
-            g_ResizeWidth = g_ResizeHeight = 0;
-            CreateRenderTarget();
-        }
+            // Handle window resize (we don't resize directly in the WM_SIZE handler)
+            if (g_ResizeWidth != 0 && g_ResizeHeight != 0) {
+                CleanupRenderTarget();
+                g_pSwapChain->ResizeBuffers(0, g_ResizeWidth, g_ResizeHeight, DXGI_FORMAT_UNKNOWN, 0);
+                g_ResizeWidth = g_ResizeHeight = 0;
+                CreateRenderTarget();
+            }
 
-        // Start the Dear ImGui frame
-        ImGui_ImplDX11_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
+            // Start the Dear ImGui frame
+            ImGui_ImplDX11_NewFrame();
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();
+        }
 
         ImGui::SetNextWindowPos(ImVec2(0, 0)); // Top-left corner
         ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize); // Full screen size
@@ -212,6 +221,7 @@ int injected_window_main()
             static bool filter_by_status_open       = false;
             static bool filter_by_status_unknown    = false;
             static bool filter_by_status_closed     = false;
+            static bool filter_by_hidden            = true;
 
             enum sort_type {
                 sort_by_timestamp, 
@@ -227,9 +237,10 @@ int injected_window_main()
             if (ImGui::BeginPopup("display_popup")){
                 ImGui::MenuItem("must have activity: recv",     "", &filter_by_has_recieve);
                 ImGui::MenuItem("must have activity: send",     "", &filter_by_has_send);
-                ImGui::MenuItem("exclude status: open",        "", &filter_by_status_open);
-                ImGui::MenuItem("exclude status: unknown",     "", &filter_by_status_unknown);
-                ImGui::MenuItem("exclude status: closed",      "", &filter_by_status_closed);
+                ImGui::MenuItem("exclude status: open",         "", &filter_by_status_open);
+                ImGui::MenuItem("exclude status: unknown",      "", &filter_by_status_unknown);
+                ImGui::MenuItem("exclude status: closed",       "", &filter_by_status_closed);
+                ImGui::MenuItem("exclude manually hidden",      "", &filter_by_hidden);
                 
                 ImGui::Separator();
                 if (ImGui::MenuItem("sort: creation timestamp",     "", socket_sort_type == sort_by_timestamp         )) socket_sort_type = sort_by_timestamp;
@@ -252,6 +263,8 @@ int injected_window_main()
                 if (filter_by_status_open    && pair.second->state == s_open)    continue;
                 if (filter_by_status_unknown && pair.second->state == s_unknown) continue;
                 if (filter_by_status_closed  && pair.second->state == s_closed)  continue;
+
+                if (filter_by_hidden && pair.second->hidden)  continue;
 
                 filtered_sockets.push_back(pair.second);
             }
@@ -279,8 +292,7 @@ int injected_window_main()
             ImGui::Text("Packets sent: %d, recieved: %d", global_io_send_log.total_logs, global_io_recv_log.total_logs);
 
 
-            // Left
-            static long long selected_socket = 0;
+            // socket preview panel (Left side) 
             {
                 ImGui::BeginChild("left pane", ImVec2(150, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
                 for (const auto& soc_logs : filtered_sockets) {
@@ -291,8 +303,8 @@ int injected_window_main()
 
                     // create a widget that shows the name of the socket ID
                     ImGui::PushID(current_socket);
-                    if (ImGui::Selectable("##selec", selected_socket == current_socket, 0, ImVec2(0, 40)))
-                        selected_socket = current_socket;
+                    if (ImGui::Selectable("##selec", selected_socket->s == current_socket, 0, ImVec2(0, 40)))
+                        selected_socket->s = current_socket;
 
                     ImGui::SameLine();
                     if (ImPlot::BeginPlot("IO", ImVec2(-1, 40), ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_NoMouseText | ImPlotFlags_NoInputs | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoFrame)) {
@@ -320,48 +332,71 @@ int injected_window_main()
             }
             ImGui::SameLine();
 
-            // Right
+            // socket details panel (Right side)
             {
                 ImGui::BeginGroup();
-                ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below us
-                ImGui::Text("Socket: %d", selected_socket);
-                ImGui::Separator();
-                if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None))
-                {
-                    if (ImGui::BeginTabItem("Description"))
-                    {
-                        ImGui::TextWrapped("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ");
-                        ImGui::EndTabItem();
+                if (!selected_socket) ImGui::Text("Select a socket...");
+                else {
+                    ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below
+                    ImGui::Text("Socket: %d", selected_socket->s);
+                    ImGui::SameLine();
+                    ImGui::InputText("name", selected_socket->custom_label, socket_custom_label_len);
+                    ImGui::Separator();
+                    if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None)) {
+                        if (ImGui::BeginTabItem("Event Log")) {
+
+                            bool is_focused = focused_socket == selected_socket;
+                            if (ImGui::Checkbox("Focus Graph", &is_focused))
+                                if (is_focused) focused_socket = selected_socket;
+                                else focused_socket = 0;
+
+                            ImGui::SameLine();
+                            if (ImGui::Checkbox("Hide Socket", &selected_socket->hidden));
+
+
+                            if (selected_socket->state == s_open)
+                                 ImGui::Text("OPEN |");
+                            else if (selected_socket->state == s_closed)
+                                 ImGui::Text("CLOSED |");
+                            else ImGui::Text("UNKNOWN |");
+                            ImGui::SameLine();
+                            ImGui::Text(nanosecondsToTimestamp(selected_socket->timestamp).c_str());
+                            ImGui::SameLine();
+                            ImGui::Text("| Events: %d", selected_socket->events.size());
+
+
+
+                            ImGui::EndTabItem();
+                        }
+                        if (ImGui::BeginTabItem("IO")) {
+                            ImGui::Text("placeholder");
+                            ImGui::EndTabItem();
+                        }
+                        ImGui::EndTabBar();
                     }
-                    if (ImGui::BeginTabItem("Details"))
-                    {
-                        ImGui::Text("ID: 0123456789");
-                        ImGui::EndTabItem();
-                    }
-                    ImGui::EndTabBar();
+                    ImGui::EndChild();
+                    if (ImGui::Button("Revert")) {}
+                    ImGui::SameLine();
+                    if (ImGui::Button("Save")) {}
                 }
-                ImGui::EndChild();
-                if (ImGui::Button("Revert")) {} 
-                ImGui::SameLine(); 
-                if (ImGui::Button("Save")) {} 
-                ImGui::EndGroup(); 
+                ImGui::EndGroup();
             }
 
-            
+
 
             ImGui::End();
         }
 
-        if (show_another_window){
+        if (show_another_window) {
             ImGui::Begin("Performance data", &show_another_window);
             ImGui::Text("Hello from another window!");
             int ram_rounded = ram_allocated;
-            if (ram_rounded < 1000) 
-                 ImGui::Text("Allocated Mem: %db", ram_rounded);
-            else if (ram_rounded < 1000000) 
-                 ImGui::Text("Allocated Mem: %dkb", ram_rounded/1000);
-            else ImGui::Text("Allocated Mem: %dmb", ram_rounded/1000000);
-            
+            if (ram_rounded < 1000)
+                ImGui::Text("Allocated Mem: %db", ram_rounded);
+            else if (ram_rounded < 1000000)
+                ImGui::Text("Allocated Mem: %dkb", ram_rounded / 1000);
+            else ImGui::Text("Allocated Mem: %dmb", ram_rounded / 1000000);
+
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
         }
@@ -379,16 +414,13 @@ int injected_window_main()
         g_SwapChainOccluded = (hr == DXGI_STATUS_OCCLUDED);
     }
 
-    // Cleanup
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
-
     CleanupDeviceD3D();
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-
     return 0;
 }
 

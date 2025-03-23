@@ -20,6 +20,15 @@ long long IO_history_timestamp() {
 	//auto now = std::chrono::high_resolution_clock::now();
 	//return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
 }
+std::string nanosecondsToTimestamp(long long nanoseconds) {
+	auto seconds = std::chrono::seconds(nanoseconds / 1'000'000'000);
+	std::chrono::system_clock::time_point timePoint(seconds);
+	std::time_t timeT = std::chrono::system_clock::to_time_t(timePoint);
+	std::stringstream timestamp;
+	timestamp << std::put_time(std::localtime(&timeT), "%H:%M:%S");
+	return timestamp.str();
+}
+
 
 inline char* callstack() {
 	log_malloc(0);
@@ -234,10 +243,12 @@ public:
 	}
 };
 
+const int socket_custom_label_len = 256;
 class SocketLogs {
 public:
 	SOCKET s = 0;
-	char cusotm_label[256] = {0};
+	bool hidden = false;
+	char custom_label[socket_custom_label_len] = {0};
 	long long timestamp = 0;
 	socket_state state = s_unknown;
 	vector<socket_log_entry*> events = {};
