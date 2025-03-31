@@ -25,7 +25,10 @@ std::string nanosecondsToTimestamp(long long nanoseconds) {
 	std::chrono::system_clock::time_point timePoint(seconds);
 	std::time_t timeT = std::chrono::system_clock::to_time_t(timePoint);
 	std::stringstream timestamp;
-	timestamp << std::put_time(std::localtime(&timeT), "%H:%M:%S");
+
+	tm time;
+	localtime_s(&time, &timeT);
+	timestamp << std::put_time(&time, "%H:%M:%S");
 	return timestamp.str();
 }
 
