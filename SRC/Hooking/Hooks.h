@@ -79,7 +79,7 @@ int hooked_WSAsend(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lp
     else event->wsasend.bytes_sent = 0;
     event->wsasend.buffer = vector<vector<char>>();
     int total_size = 0;
-    for (int i = 0; i < dwBufferCount; i++) {
+    for (unsigned int i = 0; i < dwBufferCount; i++) {
         event->wsasend.buffer.push_back(vector<char>(lpBuffers[i].buf, lpBuffers[i].buf + lpBuffers[i].len));
         total_size += lpBuffers[i].len;
     }
@@ -120,7 +120,7 @@ int hooked_WSAsendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD 
     else event->wsasendto.bytes_sent = 0;
     event->wsasendto.buffer = vector<vector<char>>();
     int total_size = 0;
-    for (int i = 0; i < dwBufferCount; i++) {
+    for (unsigned int i = 0; i < dwBufferCount; i++) {
         event->wsasendto.buffer.push_back(vector<char>(lpBuffers[i].buf, lpBuffers[i].buf + lpBuffers[i].len));
         total_size += lpBuffers[i].len;
     }
@@ -166,7 +166,7 @@ int hooked_WSAsendmsg(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberO
     else event->wsasendmsg.bytes_sent = 0;
     event->wsasendmsg.buffer = vector<vector<char>>();
     int total_size = 0;
-    for (int i = 0; i < lpMsg->dwBufferCount; i++) {
+    for (unsigned int i = 0; i < lpMsg->dwBufferCount; i++) {
         event->wsasendmsg.buffer.push_back(vector<char>(lpMsg->lpBuffers[i].buf, lpMsg->lpBuffers[i].buf + lpMsg->lpBuffers[i].len));
         total_size += lpMsg->lpBuffers[i].len;
     }
@@ -254,7 +254,7 @@ int hooked_wsa_recv(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD l
 
     event->wsarecv.buffer = vector<vector<char>>();
     int total_size = 0;
-    for (int i = 0; i < dwBufferCount; i++) {
+    for (unsigned int i = 0; i < dwBufferCount; i++) {
         event->wsarecv.buffer.push_back(vector<char>(lpBuffers[i].buf, lpBuffers[i].buf + lpBuffers[i].len));
         total_size += lpBuffers[i].len;
     }
@@ -292,7 +292,7 @@ int hooked_wsa_recv_from(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDW
 
     event->wsarecvfrom.buffer = vector<vector<char>>();
     int total_size = 0;
-    for (int i = 0; i < dwBufferCount; i++) {
+    for (unsigned int i = 0; i < dwBufferCount; i++) {
         event->wsarecvfrom.buffer.push_back(vector<char>(lpBuffers[i].buf, lpBuffers[i].buf + lpBuffers[i].len));
         total_size += lpBuffers[i].len;
     }

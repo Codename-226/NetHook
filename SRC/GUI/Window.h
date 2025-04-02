@@ -89,6 +89,47 @@ bool socket_comp_activity_timestamp(SocketLogs* a, SocketLogs* b) {
     return (a_last_activity < b_last_activity) ^ invert;
 }
 
+void display_iolog_details(const char* log_label, IOLog* log) {
+    ImGui::Text(log_label);
+    ImGui::SameLine();
+    if (log->last_update_timestamp)
+         ImGui::Text("%s |",HistoryToTimestamp(log->last_update_timestamp));
+    else ImGui::Text("--:--:-- |");
+    ImGui::SameLine();
+    ImGui::Text("packets %d",log->total_logs);
+
+    ImGui::SameLine(); 
+    if (log->total < 1000)
+         ImGui::Text("bytes %db",  log->total);
+    else if (log->total < 1000000)
+         ImGui::Text("bytes %dkb", log->total/1000);
+    else ImGui::Text("bytes %dmb", log->total/1000000);
+
+    ImGui::SameLine();
+    ImGui::Text("  GRAPH:", log->total_logs);
+
+    ImGui::SameLine(); 
+    if (log->cached_peak < 1000)
+         ImGui::Text("peak %db,", (int)(log->cached_peak));
+    else if (log->cached_peak < 1000000)
+         ImGui::Text("peak %dkb,", (int)(log->cached_peak / 1000));
+    else ImGui::Text("peak %dmb,", (int)(log->cached_peak / 1000000));
+
+    ImGui::SameLine();
+    if (log->cached_average < 1000)
+         ImGui::Text("average %db,", (int)(log->cached_average));
+    else if (log->cached_average < 1000000)
+         ImGui::Text("average %dkb,", (int)(log->cached_average / 1000));
+    else ImGui::Text("average %dmb,", (int)(log->cached_average / 1000000));
+
+    ImGui::SameLine();
+    if (log->cached_total < 1000)
+         ImGui::Text("total %db", (int)(log->cached_total));
+    else if (log->cached_total < 1000000)
+         ImGui::Text("total %dkb", (int)(log->cached_total / 1000));
+    else ImGui::Text("total %dmb", (int)(log->cached_total / 1000000));
+}
+
 // Main code
 int injected_window_main()
 {
@@ -208,15 +249,22 @@ int injected_window_main()
         {
             // performance display stuff
             {
-                ImGui::Text("Performance data!");
-                ImGui::SameLine();
-                if (ram_allocated < 1000)
-                    ImGui::Text("Allocated Mem: %db", ram_allocated);
-                else if (ram_allocated < 1000000)
-                    ImGui::Text("Allocated Mem: %dkb", ram_allocated / 1000);
-                else ImGui::Text("Allocated Mem: %dmb", ram_allocated / 1000000);
-                ImGui::SameLine();
-                ImGui::Text("%.3fms | %.1f FPS", 1000.0f / io.Framerate, io.Framerate);
+                int allocated = ram_allocated;
+                const char* size_symbol = "b";
+                if (ram_allocated >= 1000000) {
+                    allocated /= 1000000;
+                    size_symbol = "mb";
+                } else if (ram_allocated >= 1000) {
+                    allocated /= 1000;
+                    size_symbol = "kb";
+                }
+                char final_string[256];
+                snprintf(final_string, sizeof(final_string), "Performance data | Allocated Mem %d%s | %.3fms | %.1f FPS", allocated, size_symbol, 1000.0f / io.Framerate, io.Framerate);
+            
+                // shift text to the right side
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(final_string).x));
+                ImGui::Text(final_string);
+                ImGui::NewLine();
             }
 
             // refresh all the main display caches
@@ -242,7 +290,7 @@ int injected_window_main()
                 char label[256];
                 if (preview_socket_label && focused_socket->custom_label[0])
                     memcpy(label, focused_socket->custom_label, 256);
-                else sprintf_s(label, "Socket %d", focused_socket);
+                else sprintf_s(label, "Socket %lld", (long long)focused_socket->s);
                 ImGui::Text(label);
                 // revert focus to global button
                 ImGui::SameLine();
@@ -405,8 +453,18 @@ int injected_window_main()
             // filter out bad sockets
             vector<SocketLogs*> filtered_sockets = {};
             for (const auto& pair : logged_sockets) {
-                if (filter_by_has_recieve && pair.second->total_recv_log.cached_total <= 0.0f) continue;
-                if (filter_by_has_send && pair.second->total_send_log.cached_total <= 0.0f) continue;
+                // we need to refresh cache to revalidate all values
+                pair.second->total_send_log.refresh_cache(timestamp);
+                pair.second->total_recv_log.refresh_cache(timestamp);
+
+                // if both IO are required, then we actually require either, NOT both
+                if (filter_by_has_recieve && filter_by_has_send) {
+                    if (pair.second->total_recv_log.cached_total <= 0.0f 
+                    &&  pair.second->total_send_log.cached_total <= 0.0f) continue;
+                }else {
+                    if (filter_by_has_recieve && pair.second->total_recv_log.cached_total <= 0.0f) continue;
+                    if (filter_by_has_send && pair.second->total_send_log.cached_total <= 0.0f) continue;
+                }
 
                 if (filter_by_status_open && pair.second->state == s_open)    continue;
                 if (filter_by_status_unknown && pair.second->state == s_unknown) continue;
@@ -451,7 +509,7 @@ int injected_window_main()
                     soc_logs->total_recv_log.refresh_cache(timestamp);
 
                     // create a widget that shows the name of the socket ID
-                    ImGui::PushID(current_socket);
+                    ImGui::PushID((int)current_socket);
                     // we could simplify this code to check whether the two pointers match, and not whether their sockets are the same number
                     // as there should never be a scenario where the pointers match or when the pointers dont match and their socket numbers do
                     if (ImGui::Selectable("##selec", selected_socket && (long long)selected_socket->s == current_socket, 0, ImVec2(0, 40)))
@@ -474,7 +532,7 @@ int injected_window_main()
                         char label[256];
                         if (preview_socket_label && soc_logs->custom_label[0])
                             memcpy(label, soc_logs->custom_label, 256);
-                        else sprintf_s(label, "Socket %d", current_socket);
+                        else sprintf_s(label, "Socket %lld", current_socket);
                         ImGui::Text(label);
 
                         if (preview_socket_status) {
@@ -493,16 +551,28 @@ int injected_window_main()
                         }
 
                         if (preview_socket_packets_sent) {
-                            ImGui::SameLine(); ImGui::Text("| Pkt sent: %d", soc_logs->total_send_log.total_logs);
+                            ImGui::SameLine(); ImGui::Text("| Pkt sent: %db", soc_logs->total_send_log.total_logs);
                         }
                         if (preview_socket_bytes_sent) {
-                            ImGui::SameLine(); ImGui::Text("| Dat sent: %d", soc_logs->total_send_log.total);
+                            ImGui::SameLine(); 
+                            if (soc_logs->total_send_log.total < 1000)
+                                ImGui::Text("| Dat sent: %db", soc_logs->total_send_log.total);
+                            else if (soc_logs->total_send_log.total < 1000000)
+                                ImGui::Text("| Dat sent: %dkb", soc_logs->total_send_log.total / 1000);
+                            else
+                                ImGui::Text("| Dat sent: %dmb", soc_logs->total_send_log.total / 1000000);
                         }
                         if (preview_socket_packets_recieved) {
                             ImGui::SameLine(); ImGui::Text("| Pkt recv: %d", soc_logs->total_recv_log.total_logs);
                         }
                         if (preview_socket_bytes_recieved) {
-                            ImGui::SameLine(); ImGui::Text("| Dat recv: %d", soc_logs->total_recv_log.total);
+                            ImGui::SameLine();
+                            if (soc_logs->total_recv_log.total < 1000)
+                                ImGui::Text("| Dat recv: %db", soc_logs->total_recv_log.total);
+                            else if (soc_logs->total_recv_log.total < 1000000)
+                                ImGui::Text("| Dat recv: %dkb", soc_logs->total_recv_log.total);
+                            else
+                                ImGui::Text("| Dat recv: %dmb", soc_logs->total_recv_log.total);
                         }
 
                         // Restore the original cursor position
@@ -520,7 +590,7 @@ int injected_window_main()
                 if (!selected_socket) ImGui::Text("Select a socket...");
                 else {
                     ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below
-                    ImGui::Text("Socket: %d", selected_socket->s);
+                    ImGui::Text("Socket: %d", (long long)selected_socket->s);
                     ImGui::SameLine();
                     ImGui::InputText("name", selected_socket->custom_label, socket_custom_label_len);
                     ImGui::Separator();
@@ -556,6 +626,22 @@ int injected_window_main()
                         }
                         if (ImGui::BeginTabItem("IO")) {
                             ImGui::Text("placeholder");
+                            ImGui::EndTabItem();
+                        }
+                        if (ImGui::BeginTabItem("IO Details")) {
+                            display_iolog_details("total send    |", &selected_socket->total_send_log);
+                            display_iolog_details("total recv    |", &selected_socket->total_recv_log);
+                            ImGui::NewLine();
+                            display_iolog_details("send          |", &selected_socket->send_log);
+                            display_iolog_details("send to       |", &selected_socket->sendto_log);
+                            display_iolog_details("wsa send      |", &selected_socket->wsasend_log);
+                            display_iolog_details("wsa send to   |", &selected_socket->wsasendto_log);
+                            display_iolog_details("wsa send msg  |", &selected_socket->wsasendmsg_log);
+                            ImGui::NewLine();
+                            display_iolog_details("recv          |", &selected_socket->recv_log);
+                            display_iolog_details("recv from     |", &selected_socket->recvfrom_log);
+                            display_iolog_details("wsa recv      |", &selected_socket->wsarecv_log);
+                            display_iolog_details("wsa recv from |", &selected_socket->wsarecvfrom_log);
                             ImGui::EndTabItem();
                         }
                         ImGui::EndTabBar();

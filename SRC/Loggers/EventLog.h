@@ -71,7 +71,7 @@ void LogParamsEntry(const char* label, vector<param_entry> params) {
 		// write desc
 		logs.buffer[logs.used] = ' ';
 		logs.used += 1;
-		int desc_len = strlen(params[i].desc);
+		int desc_len = (int)strlen(params[i].desc); // why does this output a longlong
 		memcpy(logs.buffer + logs.used, params[i].desc, desc_len);
 		logs.used += desc_len;
 		logs.buffer[logs.used] = ' ';

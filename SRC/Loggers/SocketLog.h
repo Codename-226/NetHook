@@ -20,8 +20,7 @@ long long IO_history_timestamp() {
 	//auto now = std::chrono::high_resolution_clock::now();
 	//return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
 }
-std::string nanosecondsToTimestamp(long long nanoseconds) {
-	auto seconds = std::chrono::seconds(nanoseconds / 1'000'000'000);
+std::string secondsToTimestamp(std::chrono::seconds seconds) {
 	std::chrono::system_clock::time_point timePoint(seconds);
 	std::time_t timeT = std::chrono::system_clock::to_time_t(timePoint);
 	std::stringstream timestamp;
@@ -30,6 +29,14 @@ std::string nanosecondsToTimestamp(long long nanoseconds) {
 	localtime_s(&time, &timeT);
 	timestamp << std::put_time(&time, "%H:%M:%S");
 	return timestamp.str();
+}
+std::string nanosecondsToTimestamp(long long nanoseconds) {
+	auto seconds = std::chrono::seconds(nanoseconds / 1'000'000'000); 
+	return secondsToTimestamp(seconds);
+}
+std::string HistoryToTimestamp(long long timestamp) {
+	auto seconds = std::chrono::seconds(timestamp / 10);
+	return secondsToTimestamp(seconds);
 }
 
 //#include <sstream>
@@ -197,11 +204,11 @@ public:
 		if (steps_since_last_update > io_history_count) steps_since_last_update = io_history_count;
 
 		// shift all entries back by X amount
-		for (int i = steps_since_last_update; i < io_history_count; i++)
+		for (long long i = steps_since_last_update; i < io_history_count; i++)
 			data[i - steps_since_last_update] = data[i];
 
 		// then reset values of all progressed values?
-		for (int i = io_history_count - steps_since_last_update; i < io_history_count; i++)
+		for (long long i = io_history_count - steps_since_last_update; i < io_history_count; i++)
 			data[i] = 0.0f;
 
 		// set new timestamp
