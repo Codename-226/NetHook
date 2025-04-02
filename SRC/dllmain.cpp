@@ -1,3 +1,8 @@
+#define _HAS_STD_BYTE 0
+
+
+
+
 #include "../pch.h"
 
 #include <winsock2.h>

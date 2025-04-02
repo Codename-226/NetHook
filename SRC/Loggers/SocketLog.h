@@ -32,25 +32,26 @@ std::string nanosecondsToTimestamp(long long nanoseconds) {
 	return timestamp.str();
 }
 
-#include <iostream>
-#include <sstream>
+//#include <sstream>
 #include <stacktrace>
-inline char* callstack() {
+char* callstack() {
 
-	auto trace = std::stacktrace::current();
+	//auto trace = std::stacktrace::current();
 
-	std::ostringstream oss;
-	oss << "Stack Trace:\n";
-	for (const auto& entry : trace) {
-		oss << entry << "\n";
-	}
+	//std::ostringstream oss;
+	//oss << "Stack Trace:\n";
+	//for (const auto& entry : trace) {
+	//	oss << entry << "\n";
+	//}
 
-	auto var = oss.str();
+	//auto var = oss.str();
 
-	char* bytes = (char*)malloc(var.size());
-	memcpy(bytes, var.c_str(), var.size());
-	log_malloc(var.size());
-	return bytes;
+	//char* bytes = (char*)malloc(var.size());
+	//memcpy(bytes, var.c_str(), var.size());
+	//log_malloc(var.size());
+	//return bytes;
+
+	return 0;
 }
 
 

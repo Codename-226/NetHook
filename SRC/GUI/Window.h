@@ -151,7 +151,7 @@ int injected_window_main()
 
     // Main loop
     bool done = false;
-    while (!done){
+    while (!done) {
         // update window
         {
             // Poll and handle messages (inputs, window resize, etc.)
@@ -225,17 +225,17 @@ int injected_window_main()
 
 
 
-            static bool focused_show_global_send    = true;
-            static bool focused_show_global_recv    = true;
-            static bool focused_show_send           = false;
-            static bool focused_show_sendto         = false;
-            static bool focused_show_wsasend        = false;
-            static bool focused_show_wsasendto      = false;
-            static bool focused_show_wsasendmsg     = false;
-            static bool focused_show_recv           = false;
-            static bool focused_show_recvfrom       = false;
-            static bool focused_show_wsarecv        = false;
-            static bool focused_show_wsarecvfrom    = false;
+            static bool focused_show_global_send = true;
+            static bool focused_show_global_recv = true;
+            static bool focused_show_send = false;
+            static bool focused_show_sendto = false;
+            static bool focused_show_wsasend = false;
+            static bool focused_show_wsasendto = false;
+            static bool focused_show_wsasendmsg = false;
+            static bool focused_show_recv = false;
+            static bool focused_show_recvfrom = false;
+            static bool focused_show_wsarecv = false;
+            static bool focused_show_wsarecvfrom = false;
 
             // denote thingo
             if (focused_socket) {
@@ -245,7 +245,7 @@ int injected_window_main()
                 else sprintf_s(label, "Socket %d", focused_socket);
                 ImGui::Text(label);
                 // revert focus to global button
-                ImGui::SameLine(); 
+                ImGui::SameLine();
                 if (ImGui::Button("View global")) {
                     focused_socket = 0;
                 }
@@ -265,48 +265,61 @@ int injected_window_main()
                 ImGui::SameLine(); ImGui::Checkbox("wsarecv", &focused_show_wsarecv);
                 ImGui::SameLine(); ImGui::Checkbox("wsarecvfrom", &focused_show_wsarecvfrom);
 
-            } else ImGui::Text("Viewing global");
+            }
+            else ImGui::Text("Viewing global");
 
 
             ImVec2 ogCursorPos = ImGui::GetCursorPos();
             if (focused_socket) {
-                if (focused_show_global_send){
+                if (focused_show_global_send) {
                     focused_socket->total_send_log.refresh_cache(timestamp);
-                    log_thing("total send", focused_socket->total_send_log, 0);}
-                if (focused_show_global_recv){
+                    log_thing("total send", focused_socket->total_send_log, 0);
+                }
+                if (focused_show_global_recv) {
                     focused_socket->total_recv_log.refresh_cache(timestamp);
-                    log_thing("total recv", focused_socket->total_recv_log, 0);}
+                    log_thing("total recv", focused_socket->total_recv_log, 0);
+                }
 
-                if (focused_show_send){
+                if (focused_show_send) {
                     focused_socket->send_log.refresh_cache(timestamp);
-                    log_thing("send", focused_socket->send_log, 0);}
-                if (focused_show_sendto){
+                    log_thing("send", focused_socket->send_log, 0);
+                }
+                if (focused_show_sendto) {
                     focused_socket->sendto_log.refresh_cache(timestamp);
-                    log_thing("sendto", focused_socket->sendto_log, 0);}
-                if (focused_show_wsasend){
+                    log_thing("sendto", focused_socket->sendto_log, 0);
+                }
+                if (focused_show_wsasend) {
                     focused_socket->wsasend_log.refresh_cache(timestamp);
-                    log_thing("wsasend", focused_socket->wsasend_log, 0);}
-                if (focused_show_wsasendto){
+                    log_thing("wsasend", focused_socket->wsasend_log, 0);
+                }
+                if (focused_show_wsasendto) {
                     focused_socket->wsasendto_log.refresh_cache(timestamp);
-                    log_thing("wsasendto", focused_socket->wsasendto_log, 0);}
-                if (focused_show_wsasendmsg){
+                    log_thing("wsasendto", focused_socket->wsasendto_log, 0);
+                }
+                if (focused_show_wsasendmsg) {
                     focused_socket->wsasendmsg_log.refresh_cache(timestamp);
-                    log_thing("wsasendmsg", focused_socket->wsasendmsg_log, 0);}
-                
-                if (focused_show_recv){
+                    log_thing("wsasendmsg", focused_socket->wsasendmsg_log, 0);
+                }
+
+                if (focused_show_recv) {
                     focused_socket->recv_log.refresh_cache(timestamp);
-                    log_thing("recv", focused_socket->recv_log, 0);}
-                if (focused_show_recvfrom){
+                    log_thing("recv", focused_socket->recv_log, 0);
+                }
+                if (focused_show_recvfrom) {
                     focused_socket->recvfrom_log.refresh_cache(timestamp);
-                    log_thing("recvfrom", focused_socket->recvfrom_log, 0);}
-                if (focused_show_wsarecv){
+                    log_thing("recvfrom", focused_socket->recvfrom_log, 0);
+                }
+                if (focused_show_wsarecv) {
                     focused_socket->wsarecv_log.refresh_cache(timestamp);
-                    log_thing("wsarecv", focused_socket->wsarecv_log, 0);}
-                if (focused_show_wsarecvfrom){ 
+                    log_thing("wsarecv", focused_socket->wsarecv_log, 0);
+                }
+                if (focused_show_wsarecvfrom) {
                     focused_socket->wsarecvfrom_log.refresh_cache(timestamp);
-                    log_thing("wsarecvfrom", focused_socket->wsarecvfrom_log, 0);}
-            // otherwise no focused socket, just show global send/recv
-            } else {
+                    log_thing("wsarecvfrom", focused_socket->wsarecvfrom_log, 0);
+                }
+                // otherwise no focused socket, just show global send/recv
+            }
+            else {
                 global_io_send_log.refresh_cache(timestamp);
                 global_io_recv_log.refresh_cache(timestamp);
                 log_thing("send", global_io_send_log, 0);
@@ -318,18 +331,19 @@ int injected_window_main()
                 ImPlot::SetupAxes(0, 0, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines);
 
                 if (focused_socket) {
-                    if (focused_show_global_send)   ImPlot::PlotLine("total send",  focused_socket->total_send_log.cached_data,  io_history_count);
-                    if (focused_show_global_recv)   ImPlot::PlotLine("total recv",  focused_socket->total_recv_log.cached_data,  io_history_count);
-                    if (focused_show_send)          ImPlot::PlotLine("send",        focused_socket->send_log.cached_data,        io_history_count);
-                    if (focused_show_sendto)        ImPlot::PlotLine("sendto",      focused_socket->sendto_log.cached_data,      io_history_count);
-                    if (focused_show_wsasend)       ImPlot::PlotLine("wsasend",     focused_socket->wsasend_log.cached_data,     io_history_count);
-                    if (focused_show_wsasendto)     ImPlot::PlotLine("wsasendto",   focused_socket->wsasendto_log.cached_data,   io_history_count);
-                    if (focused_show_wsasendmsg)    ImPlot::PlotLine("wsasendmsg",  focused_socket->wsasendmsg_log.cached_data,  io_history_count);
-                    if (focused_show_recv)          ImPlot::PlotLine("recv",        focused_socket->recv_log.cached_data,        io_history_count);
-                    if (focused_show_recvfrom)      ImPlot::PlotLine("recvfrom",    focused_socket->recvfrom_log.cached_data,    io_history_count);
-                    if (focused_show_wsarecv)       ImPlot::PlotLine("wsarecv",     focused_socket->wsarecv_log.cached_data,     io_history_count);
+                    if (focused_show_global_send)   ImPlot::PlotLine("total send", focused_socket->total_send_log.cached_data, io_history_count);
+                    if (focused_show_global_recv)   ImPlot::PlotLine("total recv", focused_socket->total_recv_log.cached_data, io_history_count);
+                    if (focused_show_send)          ImPlot::PlotLine("send", focused_socket->send_log.cached_data, io_history_count);
+                    if (focused_show_sendto)        ImPlot::PlotLine("sendto", focused_socket->sendto_log.cached_data, io_history_count);
+                    if (focused_show_wsasend)       ImPlot::PlotLine("wsasend", focused_socket->wsasend_log.cached_data, io_history_count);
+                    if (focused_show_wsasendto)     ImPlot::PlotLine("wsasendto", focused_socket->wsasendto_log.cached_data, io_history_count);
+                    if (focused_show_wsasendmsg)    ImPlot::PlotLine("wsasendmsg", focused_socket->wsasendmsg_log.cached_data, io_history_count);
+                    if (focused_show_recv)          ImPlot::PlotLine("recv", focused_socket->recv_log.cached_data, io_history_count);
+                    if (focused_show_recvfrom)      ImPlot::PlotLine("recvfrom", focused_socket->recvfrom_log.cached_data, io_history_count);
+                    if (focused_show_wsarecv)       ImPlot::PlotLine("wsarecv", focused_socket->wsarecv_log.cached_data, io_history_count);
                     if (focused_show_wsarecvfrom)   ImPlot::PlotLine("wsarecvfrom", focused_socket->wsarecvfrom_log.cached_data, io_history_count);
-                } else {
+                }
+                else {
                     ImPlot::PlotLine("send", global_io_send_log.cached_data, io_history_count);
                     ImPlot::PlotLine("recv", global_io_recv_log.cached_data, io_history_count);
                 }
@@ -340,16 +354,16 @@ int injected_window_main()
 
 
 
-            static bool filter_by_has_recieve       = false;
-            static bool filter_by_has_send          = false;
-            static bool filter_by_status_open       = false;
-            static bool filter_by_status_unknown    = false;
-            static bool filter_by_status_closed     = false;
-            static bool filter_by_hidden            = true;
+            static bool filter_by_has_recieve = false;
+            static bool filter_by_has_send = false;
+            static bool filter_by_status_open = false;
+            static bool filter_by_status_unknown = false;
+            static bool filter_by_status_closed = false;
+            static bool filter_by_hidden = true;
 
             enum sort_type {
-                sort_by_timestamp, 
-                sort_by_status, 
+                sort_by_timestamp,
+                sort_by_status,
                 sort_by_activity_total,
                 sort_by_activity_local,
                 sort_by_activity_timestamp,
@@ -358,32 +372,33 @@ int injected_window_main()
 
             if (ImGui::Button("Sockets.."))
                 ImGui::OpenPopup("display_popup");
-            if (ImGui::BeginPopup("display_popup")){
-                ImGui::MenuItem("require: recv activity",     "", &filter_by_has_recieve);
-                ImGui::MenuItem("require: send activity",     "", &filter_by_has_send);
-                ImGui::MenuItem("exclude: status open",         "", &filter_by_status_open);
-                ImGui::MenuItem("exclude: status unknown",      "", &filter_by_status_unknown);
-                ImGui::MenuItem("exclude: status closed",       "", &filter_by_status_closed);
-                ImGui::MenuItem("exclude: manually hidden",      "", &filter_by_hidden);
-                
-                ImGui::Separator();
-                if (ImGui::MenuItem("sort: creation timestamp",     "", socket_sort_type == sort_by_timestamp         )) socket_sort_type = sort_by_timestamp;
-                if (ImGui::MenuItem("sort: status",                 "", socket_sort_type == sort_by_status            )) socket_sort_type = sort_by_status;
-                if (ImGui::MenuItem("sort: total activity",         "", socket_sort_type == sort_by_activity_total    )) socket_sort_type = sort_by_activity_total;
-                if (ImGui::MenuItem("sort: recent activity",        "", socket_sort_type == sort_by_activity_local    )) socket_sort_type = sort_by_activity_local;
-                if (ImGui::MenuItem("sort: last activity timestamp","", socket_sort_type == sort_by_activity_timestamp)) socket_sort_type = sort_by_activity_timestamp;
-                ImGui::Separator();
-                ImGui::MenuItem(    "sort: invert", "", &invert);
+            if (ImGui::BeginPopup("display_popup")) {
+                ImGui::MenuItem("require: recv activity", "", &filter_by_has_recieve);
+                ImGui::MenuItem("require: send activity", "", &filter_by_has_send);
+                ImGui::MenuItem("exclude: status open", "", &filter_by_status_open);
+                ImGui::MenuItem("exclude: status unknown", "", &filter_by_status_unknown);
+                ImGui::MenuItem("exclude: status closed", "", &filter_by_status_closed);
+                ImGui::MenuItem("exclude: manually hidden", "", &filter_by_hidden);
 
                 ImGui::Separator();
-                ImGui::MenuItem("preview: packets sent",     "", &preview_socket_packets_sent);
+                if (ImGui::MenuItem("sort: creation timestamp", "", socket_sort_type == sort_by_timestamp)) socket_sort_type = sort_by_timestamp;
+                if (ImGui::MenuItem("sort: status", "", socket_sort_type == sort_by_status)) socket_sort_type = sort_by_status;
+                if (ImGui::MenuItem("sort: total activity", "", socket_sort_type == sort_by_activity_total)) socket_sort_type = sort_by_activity_total;
+                if (ImGui::MenuItem("sort: recent activity", "", socket_sort_type == sort_by_activity_local)) socket_sort_type = sort_by_activity_local;
+                if (ImGui::MenuItem("sort: last activity timestamp", "", socket_sort_type == sort_by_activity_timestamp)) socket_sort_type = sort_by_activity_timestamp;
+                ImGui::Separator();
+                ImGui::MenuItem("sort: invert", "", &invert);
+
+                ImGui::Separator();
+                ImGui::MenuItem("preview: packets sent", "", &preview_socket_packets_sent);
                 ImGui::MenuItem("preview: packets recieved", "", &preview_socket_packets_recieved);
-                ImGui::MenuItem("preview: bytes sent",       "", &preview_socket_bytes_sent);
-                ImGui::MenuItem("preview: bytes recieved",   "", &preview_socket_bytes_recieved);
-                ImGui::MenuItem("preview: timestamp",        "", &preview_socket_timestamp);
-                ImGui::MenuItem("preview: status",           "", &preview_socket_status);
-                ImGui::MenuItem("preview: events",           "", &preview_socket_event_count);
-                ImGui::MenuItem("preview: label",            "", &preview_socket_label);
+                ImGui::MenuItem("preview: bytes sent", "", &preview_socket_bytes_sent);
+                ImGui::MenuItem("preview: bytes recieved", "", &preview_socket_bytes_recieved);
+                ImGui::MenuItem("preview: timestamp", "", &preview_socket_timestamp);
+                ImGui::MenuItem("preview: status", "", &preview_socket_status);
+                ImGui::MenuItem("preview: events", "", &preview_socket_event_count);
+                ImGui::MenuItem("preview: label", "", &preview_socket_label);
+                ImGui::End();
             }
 
 
@@ -391,11 +406,11 @@ int injected_window_main()
             vector<SocketLogs*> filtered_sockets = {};
             for (const auto& pair : logged_sockets) {
                 if (filter_by_has_recieve && pair.second->total_recv_log.cached_total <= 0.0f) continue;
-                if (filter_by_has_send    && pair.second->total_send_log.cached_total <= 0.0f) continue;
+                if (filter_by_has_send && pair.second->total_send_log.cached_total <= 0.0f) continue;
 
-                if (filter_by_status_open    && pair.second->state == s_open)    continue;
+                if (filter_by_status_open && pair.second->state == s_open)    continue;
                 if (filter_by_status_unknown && pair.second->state == s_unknown) continue;
-                if (filter_by_status_closed  && pair.second->state == s_closed)  continue;
+                if (filter_by_status_closed && pair.second->state == s_closed)  continue;
 
                 if (filter_by_hidden && pair.second->hidden)  continue;
 
@@ -428,7 +443,8 @@ int injected_window_main()
             // socket preview panel (Left side) 
             {
                 ImGui::BeginChild("left pane", ImVec2(150, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
-                for (const auto& soc_logs : filtered_sockets) {
+                for (int i = 0; i < filtered_sockets.size(); i++) {
+                    auto soc_logs = filtered_sockets[i];
                     long long current_socket = (long long)soc_logs->s;
                     // refresh cache for our graph widget
                     soc_logs->total_send_log.refresh_cache(timestamp);
@@ -436,8 +452,10 @@ int injected_window_main()
 
                     // create a widget that shows the name of the socket ID
                     ImGui::PushID(current_socket);
-                    if (ImGui::Selectable("##selec", selected_socket->s == current_socket, 0, ImVec2(0, 40)))
-                        selected_socket->s = current_socket;
+                    // we could simplify this code to check whether the two pointers match, and not whether their sockets are the same number
+                    // as there should never be a scenario where the pointers match or when the pointers dont match and their socket numbers do
+                    if (ImGui::Selectable("##selec", selected_socket && (long long)selected_socket->s == current_socket, 0, ImVec2(0, 40)))
+                        selected_socket = soc_logs;
 
                     ImGui::SameLine();
                     if (ImPlot::BeginPlot("IO", ImVec2(-1, 40), ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_NoMouseText | ImPlotFlags_NoInputs | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoFrame)) {
@@ -455,31 +473,37 @@ int injected_window_main()
 
                         char label[256];
                         if (preview_socket_label && soc_logs->custom_label[0])
-                             memcpy(label, soc_logs->custom_label, 256);
+                            memcpy(label, soc_logs->custom_label, 256);
                         else sprintf_s(label, "Socket %d", current_socket);
                         ImGui::Text(label);
 
                         if (preview_socket_status) {
-                            ImGui::SameLine(); 
-                            if      (soc_logs->state == s_closed) ImGui::Text("| CLOSED");
-                            else if (soc_logs->state == s_open  ) ImGui::Text("| OPEN");
+                            ImGui::SameLine();
+                            if (soc_logs->state == s_closed) ImGui::Text("| CLOSED");
+                            else if (soc_logs->state == s_open) ImGui::Text("| OPEN");
                             else                                  ImGui::Text("| UNKNOWN");
                         }
-                        
-                        if (preview_socket_timestamp){
-                            ImGui::SameLine(); ImGui::Text("| %s", nanosecondsToTimestamp(soc_logs->timestamp).c_str());}
-                        
-                        if (preview_socket_event_count){
-                            ImGui::SameLine(); ImGui::Text("| Events: %d", soc_logs->events.size());}
 
-                        if (preview_socket_packets_sent){
-                            ImGui::SameLine(); ImGui::Text("| Pkt sent: %d", soc_logs->total_send_log.total_logs);}
-                        if (preview_socket_bytes_sent){
-                            ImGui::SameLine(); ImGui::Text("| Dat sent: %d", soc_logs->total_send_log.total);}
-                        if (preview_socket_packets_recieved){
-                            ImGui::SameLine(); ImGui::Text("| Pkt recv: %d", soc_logs->total_recv_log.total_logs);}
-                        if (preview_socket_bytes_recieved){
-                            ImGui::SameLine(); ImGui::Text("| Dat recv: %d", soc_logs->total_recv_log.total);}
+                        if (preview_socket_timestamp) {
+                            ImGui::SameLine(); ImGui::Text("| %s", nanosecondsToTimestamp(soc_logs->timestamp).c_str());
+                        }
+
+                        if (preview_socket_event_count) {
+                            ImGui::SameLine(); ImGui::Text("| Events: %d", soc_logs->events.size());
+                        }
+
+                        if (preview_socket_packets_sent) {
+                            ImGui::SameLine(); ImGui::Text("| Pkt sent: %d", soc_logs->total_send_log.total_logs);
+                        }
+                        if (preview_socket_bytes_sent) {
+                            ImGui::SameLine(); ImGui::Text("| Dat sent: %d", soc_logs->total_send_log.total);
+                        }
+                        if (preview_socket_packets_recieved) {
+                            ImGui::SameLine(); ImGui::Text("| Pkt recv: %d", soc_logs->total_recv_log.total_logs);
+                        }
+                        if (preview_socket_bytes_recieved) {
+                            ImGui::SameLine(); ImGui::Text("| Dat recv: %d", soc_logs->total_recv_log.total);
+                        }
 
                         // Restore the original cursor position
                         ImGui::SetCursorPos(originalCursorPos);
@@ -513,9 +537,9 @@ int injected_window_main()
 
 
                             if (selected_socket->state == s_open)
-                                 ImGui::Text("OPEN |");
+                                ImGui::Text("OPEN |");
                             else if (selected_socket->state == s_closed)
-                                 ImGui::Text("CLOSED |");
+                                ImGui::Text("CLOSED |");
                             else ImGui::Text("UNKNOWN |");
                             ImGui::SameLine();
                             ImGui::Text(nanosecondsToTimestamp(selected_socket->timestamp).c_str());
