@@ -89,6 +89,20 @@ bool socket_comp_activity_timestamp(SocketLogs* a, SocketLogs* b) {
     return (a_last_activity < b_last_activity) ^ invert;
 }
 
+std::string ErrorCodeToString(DWORD error_code){
+    if (error_code == 0) return std::string("Success");
+
+    //Ask Win32 to give us the string version of that message ID.
+    //The parameters we pass in, tell Win32 to create the buffer that holds the message for us (because we don't yet know how long the message string will be).
+    LPSTR messageBuffer = nullptr;
+    size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+
+    std::string message(messageBuffer, size);
+    LocalFree(messageBuffer);
+    return message;
+}
+
 void display_iolog_details(const char* log_label, IOLog* log) {
     ImGui::Text(log_label);
     ImGui::SameLine();
@@ -614,9 +628,84 @@ int injected_window_main()
                             ImGui::SameLine();
                             ImGui::Text(nanosecondsToTimestamp(selected_socket->timestamp).c_str());
                             ImGui::SameLine();
-                            ImGui::Text("| Events: %d", selected_socket->events.size());
+                            ImGui::Text("| Events: %d (scroll index: %d)", selected_socket->events.size(), selected_socket->log_event_index);
 
                             // preview 8 events
+                            // -1 means view from bottom most
+
+                            if (!selected_socket->events.size())
+                                ImGui::Text("No Events...");
+
+                            else{
+                                const int max_loggy_elements = 8;
+                                float totalHeight = ImGui::GetContentRegionAvail().y; // Available height in the panel 
+                                float elementHeight = totalHeight / max_loggy_elements; // Height for each element
+                                int last_valid_index = selected_socket->events.size() - 1;
+
+                                // auto move scroll to bottom index if too few elements
+                                /*if (selected_socket->log_event_index >= 0 && selected_socket->log_event_index < max_loggy_elements - 1) {
+                                    if (last_valid_index > max_loggy_elements - 1)
+                                         selected_socket->log_event_index = max_loggy_elements - 1;
+                                    else selected_socket->log_event_index = last_valid_index;
+                                }*/
+
+                                // move to max if auto scroll to bottom is enabled
+                                int element_index = selected_socket->log_event_index;
+                                if (element_index < 0) element_index = last_valid_index;
+
+                                element_index -= max_loggy_elements;
+                                if (element_index < 0) element_index = 0;
+
+                                // validate the amount of thingos to show
+                                int last_index = element_index + max_loggy_elements - 1;
+                                if (last_index > last_valid_index) last_index = last_valid_index;
+
+
+                                for (int i = element_index; i <= last_index; i++) { 
+                                    // get element index
+
+                                    ImGui::PushID(i); // Push a unique ID for each element
+                                    socket_log_entry* curr_loggy = selected_socket->events[i]; 
+                                    if (ImGui::BeginChild("##", ImVec2(-1, elementHeight))) {
+
+
+                                        // event_name | 00:00:00 | send (wsasendto) | success
+                                        // param1: 123 | param2: 234 | param3: 345
+                                        // [ COPY ] callstack + 0x22103120, callstack + 0x534847383124213
+
+                                        ImGui::Text("%s | %s | ", curr_loggy->name, nanosecondsToTimestamp(curr_loggy->timestamp).c_str());
+                                        ImGui::SameLine();
+                                        if      (curr_loggy->category == c_create ) ImGui::Text("create");
+                                        else if (curr_loggy->category == c_send   ) ImGui::Text("send");
+                                        else if (curr_loggy->category == c_recieve) ImGui::Text("receive");
+                                        else if (curr_loggy->category == c_info   ) ImGui::Text("info");
+                                        ImGui::SameLine();
+                                        switch (curr_loggy->type) {
+                                            case t_send:            ImGui::Text("(Send) |");        break;
+                                            case t_send_to:         ImGui::Text("(SendTo) |");      break;
+                                            case t_wsa_send:        ImGui::Text("(WSASend) |");     break;
+                                            case t_wsa_send_to:     ImGui::Text("(WSASendTo) |");   break;
+                                            case t_wsa_send_msg:    ImGui::Text("(WSASendMsg) |");  break;
+                                            case t_recv:            ImGui::Text("(Recv) |");        break;
+                                            case t_recv_from:       ImGui::Text("(RecvFrom) |");    break;
+                                            case t_wsa_recv:        ImGui::Text("(WSARecv) |");     break;
+                                            case t_wsa_recv_from:   ImGui::Text("(WSARecvFrom) |"); break;
+                                        }
+                                        ImGui::SameLine();
+                                        ImGui::Text(ErrorCodeToString(curr_loggy->error_code).c_str());
+                                        // fill in all the data type specific variable displays
+
+
+                                        //// callstack
+                                        //ImGui::Text(curr_loggy->callstack);
+                                        ImGui::EndChild();
+                                    }
+
+                                    ImGui::PopID();
+                                }
+
+                            }
+
 
                             // use a cached variable to determine what position we are at in the events thing
 

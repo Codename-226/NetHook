@@ -273,8 +273,6 @@ const int socket_custom_label_len = 256;
 class SocketLogs {
 public:
 	SOCKET s = 0;
-	bool hidden = false;
-	char custom_label[socket_custom_label_len] = {0};
 	long long timestamp = 0;
 	socket_state state = s_unknown;
 	vector<socket_log_entry*> events = {};
@@ -291,6 +289,11 @@ public:
 	IOLog recvfrom_log = {};
 	IOLog wsarecv_log = {};
 	IOLog wsarecvfrom_log = {};
+
+	// UI values
+	char custom_label[socket_custom_label_len] = { 0 };
+	bool hidden = false;
+	int log_event_index = -1;
 };
 
 
