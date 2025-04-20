@@ -43,22 +43,22 @@ std::string HistoryToTimestamp(long long timestamp) {
 #include <stacktrace>
 char* callstack() {
 
-	//auto trace = std::stacktrace::current();
+	auto trace = std::stacktrace::current();
 
-	//std::ostringstream oss;
-	//oss << "Stack Trace:\n";
-	//for (const auto& entry : trace) {
-	//	oss << entry << "\n";
-	//}
+	std::ostringstream oss;
+	oss << "Stack Trace:\n";
+	for (const auto& entry : trace) {
+		oss << entry << "\n";
+	}
 
-	//auto var = oss.str();
+	auto var = oss.str();
 
-	//char* bytes = (char*)malloc(var.size());
-	//memcpy(bytes, var.c_str(), var.size());
-	//log_malloc(var.size());
-	//return bytes;
+	char* bytes = (char*)malloc(var.size());
+	memcpy(bytes, var.c_str(), var.size());
+	log_malloc(var.size());
+	return bytes;
 
-	return 0;
+	//return 0;
 }
 
 
@@ -294,6 +294,7 @@ public:
 	char custom_label[socket_custom_label_len] = { 0 };
 	bool hidden = false;
 	int log_event_index = -1;
+	int log_event_index_focused = -1;
 };
 
 
