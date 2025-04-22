@@ -144,6 +144,29 @@ void display_iolog_details(const char* log_label, IOLog* log) {
     else ImGui::Text("total %dmb", (int)(log->cached_total / 1000000));
 }
 
+// gets string containing 16 characters, delimited if too long
+std::string BufferShortPreview(vector<char> preview_buffer) {
+    //const int buffer_size = 48;
+    //char buffer[buffer_size+1];
+    //// if preview is too big to fit in buffer, put as many as we can and delimit
+    //if (preview_buffer.size()*3 >= buffer_size) {
+    //    for (int i = 0; i*3 < buffer_size-3; i++)
+    //        sprintf_s(buffer + (i*3), 4, "%02X ", preview_buffer[i]);
+    //    // add delimiting ...
+    //    sprintf_s(buffer + buffer_size-3, 4, "...");
+
+    //// else just put all the chars into the buffer
+    //} else for (int i = 0; i < preview_buffer.size(); i++)
+    //    sprintf_s(buffer + (i*3), 4, "%02X ", preview_buffer[i]);
+    //return string(buffer);
+    std::stringstream ss;
+    for (int i = 0; i < preview_buffer.size(); i++) {
+        ss << std::setfill('0') << std::setw(2) << std::hex << (0xff & (unsigned int)preview_buffer[i]) << " ";
+        if (i >= 32) { ss << "..."; break; };
+    }
+    return ss.str();
+}
+
 // Main code
 int injected_window_main()
 {
@@ -236,9 +259,9 @@ int injected_window_main()
             }
 
             // Start the Dear ImGui frame
-            ImGui_ImplDX11_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
+            ImGui_ImplDX11_NewFrame(); 
+            ImGui_ImplWin32_NewFrame(); 
+            ImGui::NewFrame(); 
         }
 
         ImGui::SetNextWindowPos(ImVec2(0, 0)); // Top-left corner
@@ -263,6 +286,8 @@ int injected_window_main()
         {
             // performance display stuff
             {
+
+                ImVec2 originalCursorPos = ImGui::GetCursorPos();
                 int allocated = ram_allocated;
                 const char* size_symbol = "b";
                 if (ram_allocated >= 1000000) {
@@ -273,12 +298,12 @@ int injected_window_main()
                     size_symbol = "kb";
                 }
                 char final_string[256];
-                snprintf(final_string, sizeof(final_string), "Performance data | Allocated Mem %d%s | %.3fms | %.1f FPS", allocated, size_symbol, 1000.0f / io.Framerate, io.Framerate);
+                snprintf(final_string, sizeof(final_string), "RAM %d%s | %.3fms | %.1f FPS", allocated, size_symbol, 1000.0f / io.Framerate, io.Framerate);
             
                 // shift text to the right side
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(final_string).x));
                 ImGui::Text(final_string);
-                ImGui::NewLine();
+                ImGui::SetCursorPos(originalCursorPos);
             }
 
             // refresh all the main display caches
@@ -628,7 +653,11 @@ int injected_window_main()
                             ImGui::SameLine();
                             ImGui::Text(nanosecondsToTimestamp(selected_socket->timestamp).c_str());
                             ImGui::SameLine();
-                            ImGui::Text("| Events: %d (scroll index: %d)", selected_socket->events.size(), selected_socket->log_event_index);
+                            ImGui::Text("| Events: %d", selected_socket->events.size());
+                            ImGui::SameLine(); 
+                            if (selected_socket->log_event_index < 0)
+                                 ImGui::TextColored({ 0.7,0.7,0.7,1 }, "(scroll index: %d)", selected_socket->log_event_index);
+                            else ImGui::TextColored({ 0.25,0.8,1,1 }, "(scroll index: %d)", selected_socket->log_event_index);
 
                             // preview 8 events
                             // -1 means view from bottom most
@@ -650,7 +679,8 @@ int injected_window_main()
                                     float scrollAmount = ImGui::GetIO().MouseWheel;
                                     if (selected_socket->log_event_index < 0) {
                                         if (scrollAmount > 0)
-                                            selected_socket->log_event_index = last_valid_index;
+                                            if (last_valid_index >= max_loggy_elements-1)
+                                                selected_socket->log_event_index = last_valid_index;
                                     }else {
                                         // Handle scroll up
                                         if (scrollAmount > 0) {
@@ -674,7 +704,7 @@ int injected_window_main()
                                 int element_index = selected_socket->log_event_index;
                                 if (element_index < 0) element_index = last_valid_index;
 
-                                element_index -= max_loggy_elements;
+                                element_index -= max_loggy_elements-1;
                                 if (element_index < 0) element_index = 0;
 
                                 // validate the amount of thingos to show
@@ -714,8 +744,8 @@ int injected_window_main()
                                         case t_wsa_recv_from:   ImGui::Text("(WSARecvFrom)"); break;
                                     }
                                     ImGui::SameLine();
-                                    //if (curr_loggy->error_code)
-                                        ImGui::TextColored({255,0,0,255}, " | %s", ErrorCodeToString(curr_loggy->error_code).c_str());
+                                    if (curr_loggy->error_code)
+                                        ImGui::TextColored({255,0,0,255}, " %s", ErrorCodeToString(curr_loggy->error_code).c_str());
 
                                     ImGui::EndGroup();
                                     ImGui::PopID();
@@ -735,7 +765,7 @@ int injected_window_main()
                                     socket_log_entry* curr_loggy = selected_socket->events[selected_socket->log_event_index_focused];
                                     ImGui::Text("Event %d | %s", selected_socket->log_event_index_focused, nanosecondsToTimestamp(curr_loggy->timestamp).c_str());
 
-                                    ImGui::Text("%s | ", curr_loggy->name);
+                                    ImGui::Text("%s - ", curr_loggy->name);
                                     ImGui::SameLine();
                                     if (curr_loggy->category == c_create) ImGui::Text("create");
                                     else if (curr_loggy->category == c_send) ImGui::Text("send");
@@ -743,60 +773,82 @@ int injected_window_main()
                                     else if (curr_loggy->category == c_info) ImGui::Text("info");
                                     ImGui::SameLine();
                                     switch (curr_loggy->type) {
-                                    case t_send:            ImGui::Text("(Send) | ");        break;
-                                    case t_send_to:         ImGui::Text("(SendTo) | ");      break;
-                                    case t_wsa_send:        ImGui::Text("(WSASend) | ");     break;
-                                    case t_wsa_send_to:     ImGui::Text("(WSASendTo) | ");   break;
-                                    case t_wsa_send_msg:    ImGui::Text("(WSASendMsg) | ");  break;
-                                    case t_recv:            ImGui::Text("(Recv) | ");        break;
-                                    case t_recv_from:       ImGui::Text("(RecvFrom) | ");    break;
-                                    case t_wsa_recv:        ImGui::Text("(WSARecv) | ");     break;
-                                    case t_wsa_recv_from:   ImGui::Text("(WSARecvFrom) | "); break;
+                                    case t_send:            ImGui::Text("(Send)");        break;
+                                    case t_send_to:         ImGui::Text("(SendTo)");      break;
+                                    case t_wsa_send:        ImGui::Text("(WSASend)");     break;
+                                    case t_wsa_send_to:     ImGui::Text("(WSASendTo)");   break;
+                                    case t_wsa_send_msg:    ImGui::Text("(WSASendMsg)");  break;
+                                    case t_recv:            ImGui::Text("(Recv)");        break;
+                                    case t_recv_from:       ImGui::Text("(RecvFrom)");    break;
+                                    case t_wsa_recv:        ImGui::Text("(WSARecv)");     break;
+                                    case t_wsa_recv_from:   ImGui::Text("(WSARecvFrom)"); break;
                                     }
                                     ImGui::Text("Status: %s", ErrorCodeToString(curr_loggy->error_code).c_str());
                                     ImGui::NewLine();
 
                                     // fill in variable details stuff here!!
                                     switch (curr_loggy->type) {
+                                    // SEND CLASS UI //
                                     case t_send: {
-                                        ImGui::Text("flags: %x", curr_loggy->data.send.flags);
-                                        ImGui::Text("buffer size: %llx", curr_loggy->data.send.buffer.size());
-                                        // preview buffer
-
-                                        char preview_buffer[512];
-                                        int preview_buffer_size = 512;
-
-                                        const int buffer_size = 512;
-                                        int preview_size = 100;
-                                        char buffer[buffer_size];
-                                        for (int i = 0; i < preview_size; i += 3)
-                                        {
-                                            sprintf(buffer[i], "%02X ", 12);
-                                        }
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.send.flags);
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.send.buffer.size(), BufferShortPreview(curr_loggy->data.send.buffer).c_str());
                                         break;}
                                     case t_send_to: {
-                                        ImGui::Text("(SendTo) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.sendto.flags);
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.sendto.buffer.size(), BufferShortPreview(curr_loggy->data.sendto.buffer).c_str());
+                                        ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.sendto.to.size(), BufferShortPreview(curr_loggy->data.sendto.to).c_str());
                                         break;}
                                     case t_wsa_send: {
-                                        ImGui::Text("(WSASend) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.wsasend.flags);
+                                        ImGui::Text("sent: 0x%x", curr_loggy->data.wsasend.bytes_sent);
+                                        ImGui::Text("callback: 0x%llx", curr_loggy->data.wsasend.completion_routine);
+                                        for (int i = 0; i < curr_loggy->data.wsasend.buffer.size(); i++)
+                                            ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsasend.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsasend.buffer[i]).c_str());
                                         break;}
                                     case t_wsa_send_to: {
-                                        ImGui::Text("(WSASendTo) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.wsasendto.flags);
+                                        ImGui::Text("sent: 0x%x", curr_loggy->data.wsasendto.bytes_sent);
+                                        ImGui::Text("callback: 0x%llx", curr_loggy->data.wsasendto.completion_routine);
+                                        for (int i = 0; i < curr_loggy->data.wsasendto.buffer.size(); i++)
+                                            ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsasendto.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsasendto.buffer[i]).c_str());
+                                        ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.wsasendto.to.size(), BufferShortPreview(curr_loggy->data.wsasendto.to).c_str());
                                         break;}
                                     case t_wsa_send_msg: {
-                                        ImGui::Text("(WSASendMsg) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.wsasendmsg.flags);
+                                        ImGui::Text("msg flags: 0x%x", curr_loggy->data.wsasendmsg.msg_flags);
+                                        ImGui::Text("sent: 0x%x", curr_loggy->data.wsasendmsg.bytes_sent);
+                                        ImGui::Text("callback: 0x%llx", curr_loggy->data.wsasendmsg.completion_routine);
+                                        for (int i = 0; i < curr_loggy->data.wsasendmsg.buffer.size(); i++)
+                                            ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsasendmsg.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsasendmsg.buffer[i]).c_str());
+                                        ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.wsasendmsg.to.size(), BufferShortPreview(curr_loggy->data.wsasendmsg.to).c_str());
+                                        ImGui::Text("control: 0x%llx [%s]", curr_loggy->data.wsasendmsg.control_buffer.size(), BufferShortPreview(curr_loggy->data.wsasendmsg.control_buffer).c_str());
                                         break;}
+                                    // RECIEVE CLASS UI //
                                     case t_recv: {
-                                        ImGui::Text("(Recv) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.recv.flags);
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.recv.buffer.size(), BufferShortPreview(curr_loggy->data.recv.buffer).c_str());
                                         break;}
                                     case t_recv_from: {
-                                        ImGui::Text("(RecvFrom) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.recvfrom.flags);
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.recvfrom.buffer.size(), BufferShortPreview(curr_loggy->data.recvfrom.buffer).c_str());
+                                        ImGui::Text("from: 0x%llx [%s]", curr_loggy->data.recvfrom.from.size(), BufferShortPreview(curr_loggy->data.recvfrom.from).c_str());
                                         break;}
                                     case t_wsa_recv: {
-                                        ImGui::Text("(WSARecv) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.wsarecv.flags);
+                                        ImGui::Text("out flags: 0x%x", curr_loggy->data.wsarecv.out_flags);
+                                        ImGui::Text("sent: 0x%x", curr_loggy->data.wsarecv.bytes_recived);
+                                        ImGui::Text("callback: 0x%llx", curr_loggy->data.wsarecv.completion_routine);
+                                        for (int i = 0; i < curr_loggy->data.wsarecv.buffer.size(); i++)
+                                            ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsarecv.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsarecv.buffer[i]).c_str());
                                         break;}
                                     case t_wsa_recv_from: {
-                                        ImGui::Text("(WSARecvFrom) | ");
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.wsarecvfrom.flags);
+                                        ImGui::Text("out flags: 0x%x", curr_loggy->data.wsarecvfrom.out_flags);
+                                        ImGui::Text("sent: 0x%x", curr_loggy->data.wsarecvfrom.bytes_recived);
+                                        ImGui::Text("callback: 0x%llx", curr_loggy->data.wsarecvfrom.completion_routine);
+                                        for (int i = 0; i < curr_loggy->data.wsarecvfrom.buffer.size(); i++)
+                                            ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsarecvfrom.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsarecvfrom.buffer[i]).c_str());
+                                        ImGui::Text("from: 0x%llx [%s]", curr_loggy->data.wsarecvfrom.from.size(), BufferShortPreview(curr_loggy->data.wsarecvfrom.from).c_str());
                                         break;}
                                     }
 
