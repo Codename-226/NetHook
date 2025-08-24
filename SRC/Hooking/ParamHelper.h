@@ -1,5 +1,53 @@
 #pragma once
 
+string LPCWSTRToString(LPCWSTR lpcwszStr, int length = -1){
+    if (!lpcwszStr) return string("nil");
+
+    // calc required string length
+    int str_length = WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, length, nullptr, 0, nullptr, nullptr);
+    
+    // Perform the conversion from LPCWSTR to std::string
+    string str(str_length, 0);
+    WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, -1, &str[0], str_length, nullptr, nullptr);
+    return str;
+}
+std::string BytesToHex(char* bytes, int size) {
+    std::stringstream ss;
+    for (int i = 0; i < size; i++)
+        ss << std::setfill('0') << std::setw(2) << std::hex << (0xff & (unsigned int)bytes[i]) << " ";
+    return ss.str();
+}
+string BytesToStringOrHex(char* bytes, int size) {
+
+    bool is_probably_unicode = true;
+    for (int i = 1; i < size; i += 2) {
+        if (bytes[i] != 0){
+            is_probably_unicode = false;
+            break;
+    }}
+
+    // scan through bytes to look for any bad bytes
+    bool is_valid_string = true;
+    for (int i = 0; i < size; i += 1 + (int)is_probably_unicode) {
+        if ((bytes[i] < 0x20 || bytes[i] >= 0x7F) && bytes[i] != 0x0d && bytes[i] != 0x0a) {
+            
+            is_valid_string = false;
+            break;
+    }}
+
+    // NOTE: we'll also probably have to look to see if this is a unicode string or not with the like 66 00 67 00
+
+
+    if (is_valid_string)
+        if (is_probably_unicode)
+             return LPCWSTRToString((LPCWSTR)bytes, size);
+        else return string(bytes, size);
+    
+    
+    // otherwise we have to literally convert all of it to hex string
+    return BytesToHex(bytes, size);
+}
+
 
 unsigned short flip_short(unsigned short input) {
     return (input << 8) | (input >> 8);

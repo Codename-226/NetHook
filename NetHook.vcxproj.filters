@@ -93,6 +93,12 @@
     <ClInclude Include="SRC\Loggers\PerformanceLog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SRC\Loggers\HTTPLog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SRC\Loggers\DumpLog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">

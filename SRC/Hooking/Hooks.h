@@ -308,6 +308,236 @@ int hooked_wsa_recv_from(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDW
 
 
 
+
+typedef HINTERNET(*win_http_open_func)(LPCWSTR pszAgentW, DWORD dwAccessType, LPCWSTR pszProxyW, LPCWSTR pszProxyBypassW, DWORD dwFlags);
+win_http_open_func win_http_open_ptr = NULL;
+HINTERNET hooked_win_http_open(LPCWSTR pszAgentW, DWORD dwAccessType, LPCWSTR pszProxyW, LPCWSTR pszProxyBypassW, DWORD dwFlags) {
+    auto result = win_http_open_ptr(pszAgentW, dwAccessType, pszProxyW, pszProxyBypassW, dwFlags);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)result, t_http_open, "win_http_open()", &log, 0);
+
+    log->source_type = st_WinHttp;
+    event->http_open.agent = LPCWSTRToString(pszAgentW);
+    event->http_open.access_type = dwAccessType;
+    event->http_open.proxy = LPCWSTRToString(pszProxyW);
+    event->http_open.proxy_bypass = LPCWSTRToString(pszProxyBypassW);
+    event->http_open.flags = dwFlags;
+    LogParamsEntry("win_http_open()", { param_entry{"hInternet", (uint64_t)result}, });
+    return result;
+}
+
+typedef BOOL(*win_http_close_handle_func)(HINTERNET hInternet);
+win_http_close_handle_func win_http_close_handle_ptr = NULL;
+BOOL hooked_win_http_close_handle(HINTERNET hInternet) {
+    //LogParamsEntry("begin win_http_close_handle()", {});
+    auto result = win_http_close_handle_ptr(hInternet);
+
+    // this should convert whatever the hell this is (hinternet/hconnection/hrequest) into its directly related parent
+    auto session = get_unknown_parent(hInternet);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)session, t_http_close, "win_http_close_handle()", &log, 0);
+    log->source_type = st_WinHttp;
+
+    LogParamsEntry("win_http_close_handle()", {});
+    return result;
+}
+
+typedef HINTERNET(*win_http_connect_func)(HINTERNET hSession, LPCWSTR pswzServerName, INTERNET_PORT nServerPort, DWORD dwReserved);
+win_http_connect_func win_http_connect_ptr = NULL;
+HINTERNET hooked_win_http_connect(HINTERNET hSession, LPCWSTR pswzServerName, INTERNET_PORT nServerPort, DWORD dwReserved) {
+    //LogParamsEntry("begin win_http_connect()", {});
+    auto result = win_http_connect_ptr(hSession, pswzServerName, nServerPort, dwReserved);
+
+    http_session_connection_paired(hSession, result);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)hSession, t_http_connect, "win_http_connect()", &log, 0);
+    log->source_type = st_WinHttp;
+
+    event->http_connect.server_name = LPCWSTRToString(pswzServerName);
+    event->http_connect.server_port = nServerPort;
+    event->http_connect.reserved = nServerPort;
+
+    int name_length = event->http_connect.server_name.size();
+    //if (!log->custom_label[0] && pswzServerName) {
+    if (pswzServerName) {
+        memcpy(log->custom_label, event->http_connect.server_name.c_str(), name_length >= socket_custom_label_len ? socket_custom_label_len-1 : name_length);
+    }
+
+    LogParamsEntry("win_http_connect()", {});
+    return result;
+}
+
+typedef HINTERNET(*win_http_open_request_func)(HINTERNET hConnect, LPCWSTR pwszVerb, LPCWSTR pwszObjectName, LPCWSTR pwszVersion, LPCWSTR pwszReferrer, LPCWSTR* ppwszAcceptTypes, DWORD dwFlags);
+win_http_open_request_func win_http_open_request_ptr = NULL;
+HINTERNET hooked_win_http_open_request(HINTERNET hConnect, LPCWSTR pwszVerb, LPCWSTR pwszObjectName, LPCWSTR pwszVersion, LPCWSTR pwszReferrer, LPCWSTR* ppwszAcceptTypes, DWORD dwFlags) {
+    //LogParamsEntry("begin win_http_open_request()", {});
+    auto result = win_http_open_request_ptr(hConnect, pwszVerb, pwszObjectName, pwszVersion, pwszReferrer, ppwszAcceptTypes, dwFlags);
+
+    auto session = get_connection_parent(hConnect);
+    http_request_connection_paired(result, hConnect);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)session, t_http_open_request, "win_http_open_request()", &log, 0);
+    log->source_type = st_WinHttp;
+
+    event->http_open_request.verb = LPCWSTRToString(pwszVerb);
+    event->http_open_request.object_name = LPCWSTRToString(pwszObjectName);
+    event->http_open_request.version = LPCWSTRToString(pwszVersion);
+    event->http_open_request.referrer = LPCWSTRToString(pwszReferrer);
+    event->http_open_request.flags = dwFlags;
+
+    event->http_open_request.accept_types = vector<string>();
+    if (ppwszAcceptTypes) {
+        while (*ppwszAcceptTypes) {
+            event->http_open_request.accept_types.push_back(LPCWSTRToString(*ppwszAcceptTypes));
+            ppwszAcceptTypes++; // this should move the pointer by 8 bytes
+    }}
+
+
+    LogParamsEntry("win_http_open_request()", {});
+    return result;
+}
+
+typedef BOOL(*win_http_add_request_headers_func)(HINTERNET hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers);
+win_http_add_request_headers_func win_http_add_request_headers_ptr = NULL;
+BOOL hooked_win_http_add_request_headers(HINTERNET hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers) {
+    //LogParamsEntry("begin win_http_add_request_headers()", {});
+    auto result = win_http_add_request_headers_ptr(hRequest, lpszHeaders, dwHeadersLength, dwModifiers);
+
+    auto session = get_request_parent(hRequest);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)session, t_http_add_request_headers, "win_http_add_request_headers()", &log, result ? 0 : GetLastError());
+    log->source_type = st_WinHttp;
+
+    event->http_add_request_headers.headers = LPCWSTRToString(lpszHeaders, dwHeadersLength);
+    event->http_add_request_headers.modifiers = dwModifiers;
+
+    LogParamsEntry("win_http_add_request_headers()", {});
+    return result;
+}
+
+typedef BOOL(*win_http_send_request_func)(HINTERNET hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength, DWORD dwTotalLength, DWORD_PTR dwContext);
+win_http_send_request_func win_http_send_request_ptr = NULL;
+BOOL hooked_win_http_send_request(HINTERNET hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength, DWORD dwTotalLength, DWORD_PTR dwContext) {
+    //LogParamsEntry("begin win_http_send_request()", {});
+    auto result = win_http_send_request_ptr(hRequest, lpszHeaders, dwHeadersLength, lpOptional, dwOptionalLength, dwTotalLength, dwContext);
+
+    auto session = get_request_parent(hRequest);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)session, t_http_send_request, "win_http_send_request()", &log, result ? 0 : GetLastError());
+    log->source_type = st_WinHttp;
+
+    event->http_send_request.headers = LPCWSTRToString(lpszHeaders, dwHeadersLength);
+    event->http_send_request.optional_data = BytesToStringOrHex((char*)lpOptional, dwOptionalLength);
+    event->http_send_request.total_length = dwTotalLength;
+    event->http_send_request.context = dwContext;
+
+    // log IO transaction
+    int data_sent = dwHeadersLength + dwOptionalLength;
+    log_malloc(data_sent);
+    log->sendto_log.log(data_sent);
+    log->total_send_log.log(data_sent);
+    global_http_send_log.log(data_sent);
+
+    LogParamsEntry("win_http_send_request()", {});
+    return result;
+}
+
+typedef BOOL(*win_http_write_data_func)(HINTERNET hRequest, LPCVOID lpBuffer, DWORD dwNumberOfBytesToWrite, LPDWORD lpdwNumberOfBytesWritten);
+win_http_write_data_func win_http_write_data_ptr = NULL;
+BOOL hooked_win_http_write_data(HINTERNET hRequest, LPCVOID lpBuffer, DWORD dwNumberOfBytesToWrite, LPDWORD lpdwNumberOfBytesWritten) {
+    //LogParamsEntry("begin win_http_write_data()", {});
+    auto result = win_http_write_data_ptr(hRequest, lpBuffer, dwNumberOfBytesToWrite, lpdwNumberOfBytesWritten);
+
+    auto session = get_request_parent(hRequest);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)session, t_http_write_data, "win_http_write_data()", &log, result ? 0 : GetLastError());
+    log->source_type = st_WinHttp;
+
+    event->http_write_data.data = BytesToStringOrHex((char*)lpBuffer, dwNumberOfBytesToWrite);
+    event->http_write_data.bytes_written = lpdwNumberOfBytesWritten ? *lpdwNumberOfBytesWritten : 0;
+
+    // log IO transaction
+    log_malloc(dwNumberOfBytesToWrite);
+    log->send_log.log(dwNumberOfBytesToWrite);
+    log->total_send_log.log(dwNumberOfBytesToWrite);
+    global_http_send_log.log(dwNumberOfBytesToWrite);
+
+    LogParamsEntry("win_http_write_data()", {});
+    return result;
+}
+
+typedef BOOL(*win_http_read_data_func)(HINTERNET hRequest, LPVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead);
+win_http_read_data_func win_http_read_data_ptr = NULL;
+BOOL hooked_win_http_read_data(HINTERNET hRequest, LPVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead) {
+    //LogParamsEntry("begin win_http_read_data()", {});
+    auto result = win_http_read_data_ptr(hRequest, lpBuffer, dwNumberOfBytesToRead, lpdwNumberOfBytesRead);
+    if (!lpBuffer) return result; // no log if no data
+
+    auto session = get_request_parent(hRequest);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)session, t_http_read_data, "win_http_read_data()", &log, result ? 0 : GetLastError());
+    log->source_type = st_WinHttp;
+
+    int size_in_read_buffer = dwNumberOfBytesToRead;
+    if (lpdwNumberOfBytesRead) size_in_read_buffer = *lpdwNumberOfBytesRead;
+
+    event->http_read_data.data = BytesToStringOrHex((char*)lpBuffer, size_in_read_buffer);
+    event->http_read_data.bytes_to_read = dwNumberOfBytesToRead;
+
+    // log IO transaction
+    log_malloc(size_in_read_buffer);
+    log->recv_log.log(size_in_read_buffer);
+    log->total_recv_log.log(size_in_read_buffer);
+    global_http_recv_log.log(size_in_read_buffer);
+
+    LogParamsEntry("win_http_read_data()", {});
+    return result;
+}
+
+typedef BOOL(*win_http_query_headers_func)(HINTERNET hRequest, DWORD dwInfoLevel, LPCWSTR pwszName, LPVOID lpBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex);
+win_http_query_headers_func win_http_query_headers_ptr = NULL;
+BOOL hooked_win_http_query_headers(HINTERNET hRequest, DWORD dwInfoLevel, LPCWSTR pwszName, LPVOID lpBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex) {
+    //LogParamsEntry("begin win_http_query_headers()", {});
+    int index_in = lpdwIndex ? *lpdwIndex : 0;
+    auto result = win_http_query_headers_ptr(hRequest, dwInfoLevel, pwszName, lpBuffer, lpdwBufferLength, lpdwIndex);
+    if (!lpBuffer || !lpdwBufferLength || !*lpdwBufferLength) return result; // skip if we have nothing to log??
+
+    auto session = get_request_parent(hRequest);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)session, t_http_query_headers, "win_http_query_headers()", &log, result ? 0 : GetLastError());
+    log->source_type = st_WinHttp;
+
+    event->http_query_headers.info_level = dwInfoLevel;
+    event->http_query_headers.name = LPCWSTRToString(pwszName);
+    event->http_query_headers.buffer = BytesToStringOrHex((char*)lpBuffer, *lpdwBufferLength);
+    event->http_query_headers.index_in = index_in;
+    event->http_query_headers.index_out = lpdwIndex ? *lpdwIndex : 0;
+
+    // log IO transaction
+    log_malloc(*lpdwBufferLength);
+    log->recvfrom_log.log(*lpdwBufferLength);
+    log->total_recv_log.log(*lpdwBufferLength);
+    global_http_recv_log.log(*lpdwBufferLength);
+
+    LogParamsEntry("win_http_query_headers()", {});
+    return result;
+}
+
+
+//WINHTTPAPI BOOL WinHttpCreateUrl( LPURL_COMPONENTS lpUrlComponents, DWORD dwFlags, LPWSTR pwszUrl, LPDWORD pdwUrlLength);
+
+
+
+
 bool LoadHooks() {
     if (MH_Initialize() != MH_OK) return false;
 
@@ -327,7 +557,6 @@ bool LoadHooks() {
     if (!HookMacro(&WSASendMsg, &hooked_WSAsendmsg, &WSAsendmsg_func_ptr)) return false;
     LogEntry("WSAsendmsg hooked");
 
-
     if (!HookMacro(&recv, &hooked_recv, &recv_func_ptr)) return false;
     LogEntry("recv hooked");
 
@@ -340,6 +569,34 @@ bool LoadHooks() {
     if (!HookMacro(&WSARecvFrom, &hooked_wsa_recv_from, &wsa_recv_from_func_ptr)) return false;
     LogEntry("wsarecvfrom hooked");
 
+
+    // set hooks for all win HTTP stuff
+    if (!HookMacro(&WinHttpOpen, &hooked_win_http_open, &win_http_open_ptr)) return false;
+    LogEntry("http open hooked");
+
+    if (!HookMacro(&WinHttpCloseHandle, &hooked_win_http_close_handle, &win_http_close_handle_ptr)) return false; 
+    LogEntry("http close handle hooked");
+
+    if (!HookMacro(&WinHttpConnect, &hooked_win_http_connect, &win_http_connect_ptr)) return false;
+    LogEntry("http connect hooked");
+
+    if (!HookMacro(&WinHttpOpenRequest, &hooked_win_http_open_request, &win_http_open_request_ptr)) return false;
+    LogEntry("http open request hooked");
+    
+    if (!HookMacro(&WinHttpAddRequestHeaders, &hooked_win_http_add_request_headers, &win_http_add_request_headers_ptr)) return false;
+    LogEntry("http add request headers hooked");
+
+    if (!HookMacro(&WinHttpSendRequest, &hooked_win_http_send_request, &win_http_send_request_ptr)) return false;
+    LogEntry("http send request hooked");
+
+    if (!HookMacro(&WinHttpWriteData, &hooked_win_http_write_data, &win_http_write_data_ptr)) return false;
+    LogEntry("http write data hooked");
+
+    if (!HookMacro(&WinHttpReadData, &hooked_win_http_read_data, &win_http_read_data_ptr)) return false;
+    LogEntry("http read data hooked");
+
+    if (!HookMacro(&WinHttpQueryHeaders, &hooked_win_http_query_headers, &win_http_query_headers_ptr)) return false;
+    LogEntry("http query headers hooked");
 
 
     return true;

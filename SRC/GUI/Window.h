@@ -38,6 +38,8 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 static SocketLogs* selected_socket = 0;
 static SocketLogs* focused_socket = 0;
 
+static bool focus_http = false; // used to toggle between global socket/http loggraph view
+static vector<SocketLogs*> previewed_https = {};
 
 
 static bool preview_socket_packets_sent = false;
@@ -48,6 +50,30 @@ static bool preview_socket_timestamp = false;
 static bool preview_socket_status = false;
 static bool preview_socket_event_count = false;
 static bool preview_socket_label = true;
+
+static bool focused_show_global_send = true;
+static bool focused_show_global_recv = true;
+static bool focused_show_send = false;
+static bool focused_show_sendto = false;
+static bool focused_show_wsasend = false;
+static bool focused_show_wsasendto = false;
+static bool focused_show_wsasendmsg = false;
+static bool focused_show_recv = false;
+static bool focused_show_recvfrom = false;
+static bool focused_show_wsarecv = false;
+static bool focused_show_wsarecvfrom = false;
+
+static bool filter_by_has_recieve = false;
+static bool filter_by_has_send = false;
+static bool filter_by_status_open = false;
+static bool filter_by_status_unknown = false;
+static bool filter_by_status_closed = false;
+static bool filter_by_hidden = true;
+static bool filter_by_is_socket = false;
+static bool filter_by_is_http = false;
+static bool filter_by_has_custom_name = false;
+
+
 
 void log_thing(const char* label, IOLog log, int id){   // show send stats
     ImGui::PushID(id);
@@ -224,7 +250,6 @@ int injected_window_main()
     // Our state
     bool show_demo_window = false;
     bool show_plot_demo_window = false;
-    bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -271,7 +296,21 @@ int injected_window_main()
             if (ImGui::BeginMenu("Windows")) {
                 ImGui::MenuItem("ImGui Demo", nullptr, &show_demo_window);
                 ImGui::MenuItem("ImPlot Demo", nullptr, &show_plot_demo_window);
-                ImGui::MenuItem("Perf Window", nullptr, &show_another_window);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Edit")) {
+                if (ImGui::MenuItem("Apply HTTP config", nullptr, nullptr)) {
+                    focus_http = true;
+                    filter_by_has_custom_name = true;
+                    filter_by_is_socket = true;
+                    filter_by_is_http = false;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Tools")) {
+                if (ImGui::MenuItem("Dump All HTTP", nullptr, nullptr)) {
+                    DumpAllHTTPEvents();
+                }
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
@@ -309,27 +348,31 @@ int injected_window_main()
             // refresh all the main display caches
             long long timestamp = IO_history_timestamp();
 
-
-
-
-            static bool focused_show_global_send = true;
-            static bool focused_show_global_recv = true;
-            static bool focused_show_send = false;
-            static bool focused_show_sendto = false;
-            static bool focused_show_wsasend = false;
-            static bool focused_show_wsasendto = false;
-            static bool focused_show_wsasendmsg = false;
-            static bool focused_show_recv = false;
-            static bool focused_show_recvfrom = false;
-            static bool focused_show_wsarecv = false;
-            static bool focused_show_wsarecvfrom = false;
+            // show all HTTP simplified view windows
+            for (int i = 0; i < previewed_https.size(); i++) {
+                ImGui::PushID(i);
+                bool my_window_open = true;
+                if (ImGui::Begin("HTTP View", &my_window_open, ImGuiWindowFlags_HorizontalScrollbar)){
+                    string display = FormatHTTPEvents(previewed_https[i]);
+                    if (ImGui::Button("Export"))
+                        DumpToNotepad(display);
+                    
+                    ImGui::Text(display.c_str());
+                } 
+                if (!my_window_open) {
+                    previewed_https.erase(previewed_https.begin() + i);
+                    i--;
+                }
+                ImGui::End();
+                ImGui::PopID();
+            }
 
             // denote thingo
             if (focused_socket) {
                 char label[256];
                 if (preview_socket_label && focused_socket->custom_label[0])
                     memcpy(label, focused_socket->custom_label, 256);
-                else sprintf_s(label, "Socket %lld", (long long)focused_socket->s);
+                else sprintf_s(label, "Socket %llu", (unsigned long long)focused_socket->s);
                 ImGui::Text(label);
                 // revert focus to global button
                 ImGui::SameLine();
@@ -352,8 +395,16 @@ int injected_window_main()
                 ImGui::SameLine(); ImGui::Checkbox("wsarecv", &focused_show_wsarecv);
                 ImGui::SameLine(); ImGui::Checkbox("wsarecvfrom", &focused_show_wsarecvfrom);
 
+            } else {
+                ImGui::Text("Viewing global");
+                ImGui::Checkbox("HTTP View", &focus_http);
+                ImGui::SameLine(); 
+                // ?????? what the hell
+                bool focus_socket = !focus_http;
+                ImGui::Checkbox("Socket View", &focus_socket);
+                focus_http = !focus_socket;
             }
-            else ImGui::Text("Viewing global");
+                
 
 
             ImVec2 ogCursorPos = ImGui::GetCursorPos();
@@ -407,10 +458,17 @@ int injected_window_main()
                 // otherwise no focused socket, just show global send/recv
             }
             else {
-                global_io_send_log.refresh_cache(timestamp);
-                global_io_recv_log.refresh_cache(timestamp);
-                log_thing("send", global_io_send_log, 0);
-                log_thing("recv", global_io_recv_log, 1);
+                if (focus_http) {
+                    global_http_send_log.refresh_cache(timestamp);
+                    global_http_recv_log.refresh_cache(timestamp);
+                    log_thing("send", global_http_send_log, 0);
+                    log_thing("recv", global_http_recv_log, 1);
+                } else {
+                    global_io_send_log.refresh_cache(timestamp);
+                    global_io_recv_log.refresh_cache(timestamp);
+                    log_thing("send", global_io_send_log, 0);
+                    log_thing("recv", global_io_recv_log, 1);
+                }
             }
             ImGui::SetCursorPos(ogCursorPos);
 
@@ -429,8 +487,10 @@ int injected_window_main()
                     if (focused_show_recvfrom)      ImPlot::PlotLine("recvfrom", focused_socket->recvfrom_log.cached_data, io_history_count);
                     if (focused_show_wsarecv)       ImPlot::PlotLine("wsarecv", focused_socket->wsarecv_log.cached_data, io_history_count);
                     if (focused_show_wsarecvfrom)   ImPlot::PlotLine("wsarecvfrom", focused_socket->wsarecvfrom_log.cached_data, io_history_count);
-                }
-                else {
+                } else if (focus_http){
+                    ImPlot::PlotLine("HTTP send", global_http_send_log.cached_data, io_history_count);
+                    ImPlot::PlotLine("HTTP read", global_http_recv_log.cached_data, io_history_count);
+                } else {
                     ImPlot::PlotLine("send", global_io_send_log.cached_data, io_history_count);
                     ImPlot::PlotLine("recv", global_io_recv_log.cached_data, io_history_count);
                 }
@@ -440,13 +500,6 @@ int injected_window_main()
 
 
 
-
-            static bool filter_by_has_recieve = false;
-            static bool filter_by_has_send = false;
-            static bool filter_by_status_open = false;
-            static bool filter_by_status_unknown = false;
-            static bool filter_by_status_closed = false;
-            static bool filter_by_hidden = true;
 
             enum sort_type {
                 sort_by_timestamp,
@@ -466,6 +519,9 @@ int injected_window_main()
                 ImGui::MenuItem("exclude: status unknown", "", &filter_by_status_unknown);
                 ImGui::MenuItem("exclude: status closed", "", &filter_by_status_closed);
                 ImGui::MenuItem("exclude: manually hidden", "", &filter_by_hidden);
+                ImGui::MenuItem("exclude: un-named", "", &filter_by_has_custom_name);
+                ImGui::MenuItem("exclude: socket", "", &filter_by_is_socket);
+                ImGui::MenuItem("exclude: http", "", &filter_by_is_http);
 
                 ImGui::Separator();
                 if (ImGui::MenuItem("sort: creation timestamp", "", socket_sort_type == sort_by_timestamp)) socket_sort_type = sort_by_timestamp;
@@ -488,10 +544,19 @@ int injected_window_main()
                 ImGui::End();
             }
 
+            // count up sockets & HTTP elements
+            int total_sockets = 0;
+            int total_shown_sockets = 0;
+            int total_http = 0;
+            int total_shown_http = 0;
 
             // filter out bad sockets
             vector<SocketLogs*> filtered_sockets = {};
             for (const auto& pair : logged_sockets) {
+                if (pair.second->source_type == st_Socket)
+                     total_sockets++;
+                else total_http++;
+
                 // we need to refresh cache to revalidate all values
                 pair.second->total_send_log.refresh_cache(timestamp);
                 pair.second->total_recv_log.refresh_cache(timestamp);
@@ -508,10 +573,17 @@ int injected_window_main()
                 if (filter_by_status_open && pair.second->state == s_open)    continue;
                 if (filter_by_status_unknown && pair.second->state == s_unknown) continue;
                 if (filter_by_status_closed && pair.second->state == s_closed)  continue;
+                if (filter_by_has_custom_name && pair.second->custom_label[0] == 0) continue;
 
                 if (filter_by_hidden && pair.second->hidden)  continue;
 
+                if (filter_by_is_socket && pair.second->source_type == st_Socket)  continue;
+                if (filter_by_is_http && pair.second->source_type == st_WinHttp)   continue;
+
                 filtered_sockets.push_back(pair.second);
+                if (pair.second->source_type == st_Socket)
+                     total_shown_sockets++;
+                else total_shown_http++;
             }
             // then sort sockets
             switch (socket_sort_type) {
@@ -531,8 +603,9 @@ int injected_window_main()
                 std::sort(filtered_sockets.begin(), filtered_sockets.end(), socket_comp_activity_timestamp);
                 break;
             }
+
             ImGui::SameLine();
-            ImGui::Text("Sockets: %d/%d", filtered_sockets.size(), logged_sockets.size());
+            ImGui::Text("Sockets: %d/%d HTTP: %d/%d", total_shown_sockets, total_sockets, total_shown_http, total_http);
             ImGui::SameLine();
             ImGui::Text("Packets sent: %d, recieved: %d", global_io_send_log.total_logs, global_io_recv_log.total_logs);
 
@@ -571,7 +644,8 @@ int injected_window_main()
                         char label[256];
                         if (preview_socket_label && soc_logs->custom_label[0])
                             memcpy(label, soc_logs->custom_label, 256);
-                        else sprintf_s(label, "Socket %lld", current_socket);
+                        else if (soc_logs->source_type == st_Socket) sprintf_s(label, "Socket %lld", current_socket);
+                        else  sprintf_s(label, "HTTP %lld", current_socket);
                         ImGui::Text(label);
 
                         if (preview_socket_status) {
@@ -590,7 +664,7 @@ int injected_window_main()
                         }
 
                         if (preview_socket_packets_sent) {
-                            ImGui::SameLine(); ImGui::Text("| Pkt sent: %db", soc_logs->total_send_log.total_logs);
+                            ImGui::SameLine(); ImGui::Text("| Pkt sent: %d", soc_logs->total_send_log.total_logs);
                         }
                         if (preview_socket_bytes_sent) {
                             ImGui::SameLine(); 
@@ -629,9 +703,15 @@ int injected_window_main()
                 if (!selected_socket) ImGui::Text("Select a socket...");
                 else {
                     ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing())); // Leave room for 1 line below
-                    ImGui::Text("Socket: %d", (long long)selected_socket->s);
+                    ImGui::Text("Socket: %llu", (unsigned long long)selected_socket->s);
                     ImGui::SameLine();
                     ImGui::InputText("name", selected_socket->custom_label, socket_custom_label_len);
+                    if (selected_socket->source_type == st_WinHttp) {
+                        ImGui::SameLine(); 
+                        if (ImGui::Button("HTTP View")) {
+                            previewed_https.push_back(selected_socket);
+                        }
+                    }
                     ImGui::Separator();
                     if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None)) {
                         if (ImGui::BeginTabItem("Event Log")) {
@@ -731,17 +811,27 @@ int injected_window_main()
                                     else if (curr_loggy->category == c_send   ) ImGui::Text("send    ");
                                     else if (curr_loggy->category == c_recieve) ImGui::Text("receive ");
                                     else if (curr_loggy->category == c_info   ) ImGui::Text("info    ");
+                                    else if (curr_loggy->category == c_http   ) ImGui::Text("http    ");
                                     ImGui::SameLine();
                                     switch (curr_loggy->type) {
-                                        case t_send:            ImGui::Text("(Send)       "); break;
-                                        case t_send_to:         ImGui::Text("(SendTo)     "); break;
-                                        case t_wsa_send:        ImGui::Text("(WSASend)    "); break;
-                                        case t_wsa_send_to:     ImGui::Text("(WSASendTo)  "); break;
-                                        case t_wsa_send_msg:    ImGui::Text("(WSASendMsg) "); break;
-                                        case t_recv:            ImGui::Text("(Recv)       "); break;
-                                        case t_recv_from:       ImGui::Text("(RecvFrom)   "); break;
-                                        case t_wsa_recv:        ImGui::Text("(WSARecv)    "); break;
-                                        case t_wsa_recv_from:   ImGui::Text("(WSARecvFrom)"); break;
+                                        case t_send:                     ImGui::Text("(Send)              "); break;
+                                        case t_send_to:                  ImGui::Text("(SendTo)            "); break;
+                                        case t_wsa_send:                 ImGui::Text("(WSASend)           "); break;
+                                        case t_wsa_send_to:              ImGui::Text("(WSASendTo)         "); break;
+                                        case t_wsa_send_msg:             ImGui::Text("(WSASendMsg)        "); break;
+                                        case t_recv:                     ImGui::Text("(Recv)              "); break;
+                                        case t_recv_from:                ImGui::Text("(RecvFrom)          "); break;
+                                        case t_wsa_recv:                 ImGui::Text("(WSARecv)           "); break;
+                                        case t_wsa_recv_from:            ImGui::Text("(WSARecvFrom)       "); break;
+                                        case t_http_open:                ImGui::Text("(HTTPOpen)          "); break;
+                                        case t_http_close:               ImGui::Text("(HTTPClose)         "); break;
+                                        case t_http_connect:             ImGui::Text("(HTTPConnect)       "); break;
+                                        case t_http_open_request:        ImGui::Text("(HTTPOpenRequest)   "); break;
+                                        case t_http_add_request_headers: ImGui::Text("(HTTPRequestHeaders)"); break;
+                                        case t_http_send_request:        ImGui::Text("(HTTPSendRequest)   "); break;
+                                        case t_http_write_data:          ImGui::Text("(HTTPWriteData)     "); break;
+                                        case t_http_read_data:           ImGui::Text("(HTTPReadData)      "); break;
+                                        case t_http_query_headers:       ImGui::Text("(HTTPQueryHeaders)  "); break;
                                     }
                                     ImGui::SameLine();
                                     if (curr_loggy->error_code)
@@ -771,17 +861,27 @@ int injected_window_main()
                                     else if (curr_loggy->category == c_send) ImGui::Text("send");
                                     else if (curr_loggy->category == c_recieve) ImGui::Text("receive");
                                     else if (curr_loggy->category == c_info) ImGui::Text("info");
+                                    else if (curr_loggy->category == c_http) ImGui::Text("http");
                                     ImGui::SameLine();
                                     switch (curr_loggy->type) {
-                                    case t_send:            ImGui::Text("(Send)");        break;
-                                    case t_send_to:         ImGui::Text("(SendTo)");      break;
-                                    case t_wsa_send:        ImGui::Text("(WSASend)");     break;
-                                    case t_wsa_send_to:     ImGui::Text("(WSASendTo)");   break;
-                                    case t_wsa_send_msg:    ImGui::Text("(WSASendMsg)");  break;
-                                    case t_recv:            ImGui::Text("(Recv)");        break;
-                                    case t_recv_from:       ImGui::Text("(RecvFrom)");    break;
-                                    case t_wsa_recv:        ImGui::Text("(WSARecv)");     break;
-                                    case t_wsa_recv_from:   ImGui::Text("(WSARecvFrom)"); break;
+                                    case t_send:                     ImGui::Text("(Send)");               break;
+                                    case t_send_to:                  ImGui::Text("(SendTo)");             break;
+                                    case t_wsa_send:                 ImGui::Text("(WSASend)");            break;
+                                    case t_wsa_send_to:              ImGui::Text("(WSASendTo)");          break;
+                                    case t_wsa_send_msg:             ImGui::Text("(WSASendMsg)");         break;
+                                    case t_recv:                     ImGui::Text("(Recv)");               break;
+                                    case t_recv_from:                ImGui::Text("(RecvFrom)");           break;
+                                    case t_wsa_recv:                 ImGui::Text("(WSARecv)");            break;
+                                    case t_wsa_recv_from:            ImGui::Text("(WSARecvFrom)");        break;
+                                    case t_http_open:                ImGui::Text("(HTTPOpen)");           break;
+                                    case t_http_close:               ImGui::Text("(HTTPClose)");          break;
+                                    case t_http_connect:             ImGui::Text("(HTTPConnect)");        break;
+                                    case t_http_open_request:        ImGui::Text("(HTTPOpenRequest)");    break;
+                                    case t_http_add_request_headers: ImGui::Text("(HTTPRequestHeaders)"); break;
+                                    case t_http_send_request:        ImGui::Text("(HTTPSendRequest)");    break;
+                                    case t_http_write_data:          ImGui::Text("(HTTPWriteData)");      break;
+                                    case t_http_read_data:           ImGui::Text("(HTTPReadData)");       break;
+                                    case t_http_query_headers:       ImGui::Text("(HTTPQueryHeaders)");   break;
                                     }
                                     ImGui::Text("Status: %s", ErrorCodeToString(curr_loggy->error_code).c_str());
                                     ImGui::NewLine();
@@ -850,6 +950,56 @@ int injected_window_main()
                                             ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsarecvfrom.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsarecvfrom.buffer[i]).c_str());
                                         ImGui::Text("from: 0x%llx [%s]", curr_loggy->data.wsarecvfrom.from.size(), BufferShortPreview(curr_loggy->data.wsarecvfrom.from).c_str());
                                         break;}
+                                    // HTTP CLASS UI //
+                                    case t_http_open: {
+                                        ImGui::Text("agent: %s", curr_loggy->data.http_open.agent.c_str());
+                                        ImGui::Text("access type: 0x%x", curr_loggy->data.http_open.access_type);
+                                        ImGui::Text("proxy: %s", curr_loggy->data.http_open.proxy.c_str());
+                                        ImGui::Text("proxy bypass: %s", curr_loggy->data.http_open.proxy_bypass.c_str());
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.http_open.flags);
+                                        break;}
+                                    case t_http_close: {
+                                        break;}
+                                    case t_http_connect: {
+                                        ImGui::Text("server name: %s", curr_loggy->data.http_connect.server_name.c_str());
+                                        ImGui::Text("server port: 0x%x", curr_loggy->data.http_connect.server_port);
+                                        ImGui::Text("reserved: 0x%x", curr_loggy->data.http_connect.reserved);
+                                        break;}
+                                    case t_http_open_request: {
+                                        ImGui::Text("verb: %s", curr_loggy->data.http_open_request.verb.c_str());
+                                        ImGui::Text("object name: %s", curr_loggy->data.http_open_request.object_name.c_str());
+                                        ImGui::Text("version: %s", curr_loggy->data.http_open_request.version.c_str());
+                                        ImGui::Text("referrer: %s", curr_loggy->data.http_open_request.referrer.c_str());
+                                        ImGui::Text("accepted types: ");
+                                        for (int i = 0; i < curr_loggy->data.http_open_request.accept_types.size(); i++)
+                                            ImGui::Text("%d: %s", i, curr_loggy->data.http_open_request.accept_types[i].c_str());
+                                        ImGui::Text("flags: 0x%x", curr_loggy->data.http_open_request.flags);
+                                        break;}
+                                    case t_http_add_request_headers: {
+                                        ImGui::Text("headers: %s", curr_loggy->data.http_add_request_headers.headers.c_str());
+                                        ImGui::Text("modifiers: 0x%x", curr_loggy->data.http_add_request_headers.modifiers);
+                                        break;}
+                                    case t_http_send_request: {
+                                        ImGui::Text("headers: %s", curr_loggy->data.http_send_request.headers.c_str());
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.http_send_request.optional_data.size(), curr_loggy->data.http_send_request.optional_data.c_str());
+                                        ImGui::Text("total length: 0x%x", curr_loggy->data.http_send_request.total_length);
+                                        ImGui::Text("context: 0x%llx", curr_loggy->data.http_send_request.context);
+                                        break;}
+                                    case t_http_write_data: {
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.http_write_data.data.size(), curr_loggy->data.http_write_data.data.c_str());
+                                        ImGui::Text("bytes written: 0x%x", curr_loggy->data.http_write_data.bytes_written);
+                                        break;}
+                                    case t_http_read_data: {
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.http_read_data.data.size(), curr_loggy->data.http_read_data.data.c_str());
+                                        ImGui::Text("bytes read: 0x%x", curr_loggy->data.http_read_data.bytes_to_read);
+                                        break;}
+                                    case t_http_query_headers: {
+                                        ImGui::Text("info level: 0x%x", curr_loggy->data.http_query_headers.info_level);
+                                        ImGui::Text("name: %s", curr_loggy->data.http_query_headers.name.c_str());
+                                        ImGui::Text("buffer: 0x%llx [%s]", curr_loggy->data.http_query_headers.buffer.size(), curr_loggy->data.http_query_headers.buffer.c_str());
+                                        ImGui::Text("index in: 0x%x", curr_loggy->data.http_query_headers.index_in);
+                                        ImGui::Text("index out: 0x%x", curr_loggy->data.http_query_headers.index_out);
+                                        break;}
                                     }
 
                                     if (curr_loggy->callstack)
@@ -868,19 +1018,31 @@ int injected_window_main()
                             ImGui::EndTabItem();
                         }
                         if (ImGui::BeginTabItem("IO Details")) {
-                            display_iolog_details("total send    |", &selected_socket->total_send_log);
-                            display_iolog_details("total recv    |", &selected_socket->total_recv_log);
-                            ImGui::NewLine();
-                            display_iolog_details("send          |", &selected_socket->send_log);
-                            display_iolog_details("send to       |", &selected_socket->sendto_log);
-                            display_iolog_details("wsa send      |", &selected_socket->wsasend_log);
-                            display_iolog_details("wsa send to   |", &selected_socket->wsasendto_log);
-                            display_iolog_details("wsa send msg  |", &selected_socket->wsasendmsg_log);
-                            ImGui::NewLine();
-                            display_iolog_details("recv          |", &selected_socket->recv_log);
-                            display_iolog_details("recv from     |", &selected_socket->recvfrom_log);
-                            display_iolog_details("wsa recv      |", &selected_socket->wsarecv_log);
-                            display_iolog_details("wsa recv from |", &selected_socket->wsarecvfrom_log);
+                            if (selected_socket->source_type == st_Socket) {
+                                display_iolog_details("total send    |", &selected_socket->total_send_log);
+                                display_iolog_details("total recv    |", &selected_socket->total_recv_log);
+                                ImGui::NewLine();
+                                display_iolog_details("send          |", &selected_socket->send_log);
+                                display_iolog_details("send to       |", &selected_socket->sendto_log);
+                                display_iolog_details("wsa send      |", &selected_socket->wsasend_log);
+                                display_iolog_details("wsa send to   |", &selected_socket->wsasendto_log);
+                                display_iolog_details("wsa send msg  |", &selected_socket->wsasendmsg_log);
+                                ImGui::NewLine();
+                                display_iolog_details("recv          |", &selected_socket->recv_log);
+                                display_iolog_details("recv from     |", &selected_socket->recvfrom_log);
+                                display_iolog_details("wsa recv      |", &selected_socket->wsarecv_log);
+                                display_iolog_details("wsa recv from |", &selected_socket->wsarecvfrom_log);
+                            } else { // http display for now
+                                display_iolog_details("total sent         |", &selected_socket->total_send_log);
+                                display_iolog_details("total read         |", &selected_socket->total_recv_log);
+                                ImGui::NewLine();
+                                display_iolog_details("HTTP write         |", &selected_socket->send_log);
+                                display_iolog_details("HTTP send request  |", &selected_socket->sendto_log);
+                                ImGui::NewLine();
+                                display_iolog_details("HTTP read          |", &selected_socket->recv_log);
+                                display_iolog_details("HTTP query headers |", &selected_socket->recvfrom_log);
+
+                            }
                             ImGui::EndTabItem();
                         }
                         ImGui::EndTabBar();

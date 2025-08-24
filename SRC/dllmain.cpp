@@ -8,16 +8,23 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
+//#pragma comment(lib, "winhttp.lib") // done in project settings
 
 using namespace std;
 #include <vector>
 #include <map>
 #include <unordered_map>
 #include <algorithm>
+//#include <Windows.h>
+#include <winhttp.h>
+
+//#include <atlstr.h>
 
 #include "Loggers/EventLog.h"
+#include "Loggers/DumpLog.h"
 #include "Loggers/PerformanceLog.h"
 #include "Loggers/SocketLog.h"
+#include "Loggers/HTTPLog.h";
 #include "Hooking/Hooks.h"
 
 #include "GUI/Window.h"

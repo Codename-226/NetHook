@@ -67,6 +67,7 @@ enum socket_event_category {
 	c_send, 
 	c_recieve, 
 	c_info,
+	c_http
 };
 enum socket_event_type {
 	// transfer: send
@@ -80,6 +81,17 @@ enum socket_event_type {
 	t_recv_from,
 	t_wsa_recv,
 	t_wsa_recv_from,
+	// http: stuff
+	t_http_open,
+	t_http_close,
+	t_http_connect,
+	t_http_open_request,
+	t_http_add_request_headers,
+	t_http_send_request,
+	t_http_write_data,
+	t_http_read_data,
+	t_http_query_headers,
+	//t_http_create_url,
 };
 enum socket_state {
 	s_closed,
@@ -153,6 +165,123 @@ public:
 };
 
 
+
+class httpentry_open {
+public:
+	string agent;
+	int access_type;
+	string proxy;
+	string proxy_bypass;
+	int flags;
+};
+class httpentry_close_handle {};
+class httpentry_connect {
+public:
+	string server_name;
+	INTERNET_PORT server_port;
+	int reserved;
+};
+class httpentry_open_request {
+public:
+	string verb;
+	string object_name;
+	string version;
+	string referrer;
+	vector<string> accept_types;
+	int flags;
+};
+class httpentry_add_request_headers {
+public:
+	string headers;
+	int modifiers;
+};
+class httpentry_send_request {
+public:
+	string headers;
+	string optional_data;
+	int total_length;
+	long long context;
+};
+class httpentry_write_data {
+public:
+	string data;
+	int bytes_written;
+};
+class httpentry_read_data {
+public:
+	string data;
+	int bytes_to_read; // this is the intended size of the buffer, not the actual read amount
+};
+class httpentry_query_headers {
+public:
+	int info_level;
+	string name;
+	string buffer;
+	int index_in;
+	int index_out;
+};
+//class httpentry_create_url {
+//public:
+//	int struct_size;
+//	string scheme_name;
+//	INTERNET_SCHEME scheme;
+//	string host_name;
+//	INTERNET_PORT port;
+//	string username;
+//	string password;
+//	string url_path;
+//	string extra_info;
+//	int flags;
+//	string url;
+//};
+// matches up http connects to their http sessions
+map<HINTERNET, HINTERNET> connections_to_sessions = {};
+map<HINTERNET, HINTERNET> requests_to_connections = {};
+HINTERNET get_connection_parent(HINTERNET connection) {
+	auto var = connections_to_sessions[connection];
+	// if nothing exists for this guy, just set ourselves to our own parent
+	// and we only do this so we can just give everything a single id to group everything with
+	if (var) return var;
+
+	return 0;
+
+	//connections_to_sessions[connection] = connection;
+	//return connection;
+}
+HINTERNET get_request_parent(HINTERNET request) {
+	auto var = requests_to_connections[request];
+	if (!var) { 
+		//connections_to_sessions[request] = request; 
+		return 0;
+	}
+	return get_connection_parent(var);
+}
+HINTERNET get_unknown_parent(HINTERNET hinternet) {
+	// first check if this is a request
+	auto var = requests_to_connections[hinternet];
+	if (var) hinternet = var;
+	// then check if this is a connection
+	var = connections_to_sessions[hinternet];
+	if (var) return var;
+	// otherwise we have to assume that its already a session handle
+	// however to clean up this crazy mess, we're actually going to make sure that this thing is open in our logs
+	for (auto const& x : connections_to_sessions)
+		if (x.second == hinternet)
+			return hinternet;
+	return 0;
+}
+void http_session_connection_paired(HINTERNET session, HINTERNET connection) {
+	connections_to_sessions[connection] = session;
+}
+void http_request_connection_paired(HINTERNET request, HINTERNET connection) {
+	requests_to_connections[request] = connection;
+}
+
+
+
+
+
+
 class socket_log_entry_data {
 public:
 	union {
@@ -166,6 +295,17 @@ public:
 		socentry_recvfrom recvfrom;
 		socentry_wsarecv wsarecv;
 		socentry_wsarecvfrom wsarecvfrom;
+
+		httpentry_open http_open;
+		httpentry_close_handle http_close;
+		httpentry_connect http_connect;
+		httpentry_open_request http_open_request;
+		httpentry_add_request_headers http_add_request_headers;
+		httpentry_send_request http_send_request;
+		httpentry_write_data http_write_data;
+		httpentry_read_data http_read_data;
+		httpentry_query_headers http_query_headers;
+		//httpentry_create_url http_create_url;
 	};
 };
 
@@ -269,24 +409,31 @@ public:
 	}
 };
 
+
+enum SourceType { st_Socket, st_WinHttp };
 const int socket_custom_label_len = 256;
 class SocketLogs {
 public:
-	SOCKET s = 0;
+	SourceType source_type = st_Socket;
+	// union because why not
+	union {
+		SOCKET s;
+		HINTERNET i;
+	};
 	long long timestamp = 0;
 	socket_state state = s_unknown;
 	vector<socket_log_entry*> events = {};
 	IOLog total_send_log = {};
 	IOLog total_recv_log = {};
 
-	IOLog send_log = {};
-	IOLog sendto_log = {};
+	IOLog send_log = {}; // also HTTP write
+	IOLog sendto_log = {}; // also HTTP send request
 	IOLog wsasend_log = {};
 	IOLog wsasendto_log = {};
 	IOLog wsasendmsg_log = {};
 
-	IOLog recv_log = {};
-	IOLog recvfrom_log = {};
+	IOLog recv_log = {}; // also HTTP read
+	IOLog recvfrom_log = {}; // also HTTP query headers
 	IOLog wsarecv_log = {};
 	IOLog wsarecvfrom_log = {};
 
@@ -303,6 +450,9 @@ public:
 unordered_map<SOCKET, SocketLogs*> logged_sockets = {};
 IOLog global_io_send_log = {};
 IOLog global_io_recv_log = {};
+
+IOLog global_http_send_log = {};
+IOLog global_http_recv_log = {};
 
 
 socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const char* label, SocketLogs** output_container, int error_code) {
@@ -343,6 +493,18 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 	case t_wsa_recv:
 	case t_wsa_recv_from:
 		new_socket_event->category = c_recieve;
+		break;
+	case t_http_open:
+	case t_http_close:
+	case t_http_connect:
+	case t_http_open_request:
+	case t_http_add_request_headers:
+	case t_http_send_request:
+	case t_http_write_data:
+	case t_http_read_data:
+	case t_http_query_headers:
+	//case t_http_create_url:
+		new_socket_event->category = c_http;
 		break;
 	}
 	// append
