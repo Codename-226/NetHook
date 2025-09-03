@@ -62,6 +62,4 @@ void DumpToNotepad(string text) {
     std::string filename = generateRandomFileName();;
 
     DumpString(filename, text);
-
-    // Use ShellExecute to open file with notepad.exe
 }

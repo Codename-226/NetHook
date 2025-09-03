@@ -192,7 +192,7 @@ typedef int (WSAAPI* recv_func)(SOCKET s, char* buf, int len, int flags);
 recv_func recv_func_ptr = NULL;
 int hooked_recv(SOCKET s, char* buf, int len, int flags) {
     auto len_recieved = recv_func_ptr(s, buf, len, flags);
-    if (len_recieved <= 0) return 0; // NOTE: IGNORES ERRORS
+    if (len_recieved <= 0) return len_recieved; // NOTE: ignores errors!!!!
     
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_recv, "recv()", &log, len_recieved==SOCKET_ERROR ? WSAGetLastError():0);
@@ -213,7 +213,7 @@ typedef int (WSAAPI* recv_from_func)(SOCKET s, char* buf, int len, int flags, so
 recv_from_func recv_from_func_ptr = NULL;
 int hooked_recv_from(SOCKET s, char* buf, int len, int flags, sockaddr* from, int* fromlen) {
     auto len_recieved = recv_from_func_ptr(s, buf, len, flags, from, fromlen);
-    if (len_recieved <= 0) return 0; // NOTE: IGNORES ERRORS
+    if (len_recieved <= 0) return len_recieved; // NOTE: ignores errors!!!!
 
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_recv_from, "recv_from()", &log, len_recieved==SOCKET_ERROR ? WSAGetLastError():0);
@@ -568,7 +568,6 @@ bool LoadHooks() {
 
     if (!HookMacro(&WSARecvFrom, &hooked_wsa_recv_from, &wsa_recv_from_func_ptr)) return false;
     LogEntry("wsarecvfrom hooked");
-
 
     // set hooks for all win HTTP stuff
     if (!HookMacro(&WinHttpOpen, &hooked_win_http_open, &win_http_open_ptr)) return false;

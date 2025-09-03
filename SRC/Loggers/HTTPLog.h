@@ -117,4 +117,6 @@ void DumpAllHTTPEvents() {
 	DumpToNotepad(s);
 }
 
-
+//void DumpAllHTTPEndpoints() {
+//
+//}
