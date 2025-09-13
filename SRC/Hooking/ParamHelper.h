@@ -18,6 +18,7 @@ std::string BytesToHex(char* bytes, int size) {
     return ss.str();
 }
 string BytesToStringOrHex(char* bytes, int size) {
+    
 
     bool is_probably_unicode = true;
     for (int i = 1; i < size; i += 2) {
@@ -28,20 +29,34 @@ string BytesToStringOrHex(char* bytes, int size) {
 
     // scan through bytes to look for any bad bytes
     bool is_valid_string = true;
+    bool is_probably_corrupt16 = false;
     for (int i = 0; i < size; i += 1 + (int)is_probably_unicode) {
-        if ((bytes[i] < 0x20 || bytes[i] >= 0x7F) && bytes[i] != 0x0d && bytes[i] != 0x0a) {
+        if ((bytes[i] < 0x20 || bytes[i] >= 0x7F) && bytes[i] != 0x0d && bytes[i] != 0x0a && bytes[i] != 0x09) {
             
-            is_valid_string = false;
-            break;
+            if (i < 16) // NOTE: 'probably unicode' skips odd sequence bytes so we dont check them for corrupt
+                is_probably_corrupt16 = true;
+            else {
+                is_valid_string = false;
+                break;
+            }
     }}
 
-    // NOTE: we'll also probably have to look to see if this is a unicode string or not with the like 66 00 67 00
 
-
-    if (is_valid_string)
-        if (is_probably_unicode)
-             return LPCWSTRToString((LPCWSTR)bytes, size);
-        else return string(bytes, size);
+    // so we now have this system to ski[
+    if (is_valid_string) {
+        if (is_probably_unicode) {
+            if (is_probably_corrupt16) {
+                if (size > 16) return string("16_byte_corrupt_") + LPCWSTRToString((LPCWSTR)(bytes + 16), size - 16);
+                else return string("");
+            } else return LPCWSTRToString((LPCWSTR)bytes, size);
+        } else {
+            if (is_probably_corrupt16) {
+                if (size > 16) return string("16_byte_corrupt_") + string(bytes+16, size-16);
+                else return string("");
+            }
+            else return string(bytes, size);
+        }
+    }
     
     
     // otherwise we have to literally convert all of it to hex string
