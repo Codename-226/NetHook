@@ -4,7 +4,15 @@
 #include <ctime>
 #include <sstream>
 #include "../shared_structs.h"
-
+socket_event_type filter_out_log_types = t_none;
+void UpdateLogFilter(socket_event_type type, bool state) {
+	filter_out_log_types = type;
+	if (state) filter_out_log_types = (socket_event_type)((int)filter_out_log_types | (int)type);
+	else filter_out_log_types = (socket_event_type)((int)filter_out_log_types & ~(int)type);
+}
+inline socket_event_type GetLogFilter(socket_event_type type) {
+	return (socket_event_type)((int)type & (int)filter_out_log_types);
+}
 
 LogData logs = {};
 extern "C" __declspec(dllexport) void* GetLogDataPtr() { return &logs; }
@@ -27,6 +35,10 @@ inline void CheckAdjustEventLog(int size_of_next_content) {
 	if (logs.pages_allocated * page_size <= logs.used + size_of_next_content)
 		ResizeEventLog();
 }
+void ClearLogs() {
+	logs.buffer[0] = '\0';
+	logs.used = 0;
+}
 
 
 void LogTimestamp() {
@@ -44,7 +56,8 @@ void LogTimestamp() {
 }
 
 class param_entry { public: const char* desc; uint64_t data; };
-void LogParamsEntry(const char* label, vector<param_entry> params) {
+void LogParamsEntry(const char* label, vector<param_entry> params, socket_event_type type = t_uncategorized) {
+	if (type & filter_out_log_types) return;
 	if (!logs.buffer) return;
 
 	int label_size = (int)strlen(label);
@@ -91,7 +104,8 @@ void LogParamsEntry(const char* label, vector<param_entry> params) {
 	// example output // HH:MM:SS - [LABEL]: param1 0000000000000001 param2 0000000000000002
 }
 
-void LogEntry(const char* entry) {
+void LogEntry(const char* entry, socket_event_type type = t_uncategorized) {
+	if (type & filter_out_log_types) return;
 	if (!logs.buffer) return;
 
 	int label_size = (int)strlen(entry);

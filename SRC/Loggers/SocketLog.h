@@ -69,30 +69,7 @@ enum socket_event_category {
 	c_info,
 	c_http
 };
-enum socket_event_type {
-	// transfer: send
-	t_send,
-	t_send_to,
-	t_wsa_send,
-	t_wsa_send_to,
-	t_wsa_send_msg,
-	// transfer: recieve
-	t_recv,
-	t_recv_from,
-	t_wsa_recv,
-	t_wsa_recv_from,
-	// http: stuff
-	t_http_open,
-	t_http_close,
-	t_http_connect,
-	t_http_open_request,
-	t_http_add_request_headers,
-	t_http_send_request,
-	t_http_write_data,
-	t_http_read_data,
-	t_http_query_headers,
-	//t_http_create_url,
-};
+
 enum socket_state {
 	s_closed,
 	s_open,

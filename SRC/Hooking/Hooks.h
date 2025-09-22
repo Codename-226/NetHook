@@ -36,7 +36,7 @@ int WSAAPI hooked_send(SOCKET s, const char* buf, int len, int flags) {
         param_entry{"|", put_data_into_num(buf, len)},
         param_entry{"-", put_data_into_num(buf + 8, len - 8)},
         param_entry{"-", put_data_into_num(buf + 16, len - 16)},
-    });
+    }, t_send);
     return var;
 }
 
@@ -63,7 +63,7 @@ int hooked_sendto(SOCKET s, const char* buf, int len, int flags, const sockaddr*
         param_entry{"|", put_data_into_num(buf, len)},
         param_entry{"-", put_data_into_num(buf + 8, len - 8)},
         param_entry{"-", put_data_into_num(buf + 16, len - 16)},
-        });
+        }, t_send_to);
     return var;
 }
 
@@ -98,12 +98,12 @@ int hooked_WSAsend(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lp
             param_entry{"|", put_data_into_num(lpBuffers[0].buf, lpBuffers[0].len)},
             param_entry{"-", put_data_into_num(lpBuffers[0].buf + 8, lpBuffers[0].len - 8)},
             param_entry{"-", put_data_into_num(lpBuffers[0].buf + 16, lpBuffers[0].len - 16)},
-            });
+            }, t_wsa_send);
     else
         LogParamsEntry("WSAsend()", {
             param_entry{"socket", (uint64_t)s},
             param_entry{"buffers", (uint64_t)dwBufferCount},
-        });
+        }, t_wsa_send);
     return var;
 }
 
@@ -142,14 +142,14 @@ int hooked_WSAsendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD 
             param_entry{"|", put_data_into_num(lpBuffers[0].buf, lpBuffers[0].len)},
             param_entry{"-", put_data_into_num(lpBuffers[0].buf + 8, lpBuffers[0].len - 8)},
             param_entry{"-", put_data_into_num(lpBuffers[0].buf + 16, lpBuffers[0].len - 16)},
-        });
+        }, t_wsa_send_to);
     else
         LogParamsEntry("WSAsendto()", {
             param_entry{"socket", (uint64_t)s},
             param_entry{"buffers", (uint64_t)dwBufferCount},
             param_entry{"addr_len", (uint64_t)iTolen},
             param_entry{"|", put_data_into_num((char*)lpTo, iTolen)},
-        });
+        }, t_wsa_send_to);
     return var;
 }
 
@@ -159,7 +159,7 @@ int hooked_WSAsendmsg(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberO
     auto var = WSAsendmsg_func_ptr(s, lpMsg, dwFlags, lpNumberOfBytesSent, lpOverlapped, lpCompletionRoutine);
 
     SocketLogs* log;
-    auto event = LogSocketEvent(s, t_wsa_send_to, "wsasendmsg()", &log, var==SOCKET_ERROR ? WSAGetLastError():0);
+    auto event = LogSocketEvent(s, t_wsa_send_msg, "wsasendmsg()", &log, var==SOCKET_ERROR ? WSAGetLastError():0);
 
     if (lpNumberOfBytesSent)
         event->wsasendmsg.bytes_sent = *lpNumberOfBytesSent;
@@ -180,7 +180,7 @@ int hooked_WSAsendmsg(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberO
     event->wsasendmsg.to = vector<char>((char*)lpMsg->name, (char*)(lpMsg->name) + lpMsg->namelen);
     event->wsasendmsg.control_buffer = vector<char>(lpMsg->Control.buf, lpMsg->Control.buf + lpMsg->Control.len);
 
-    LogParamsEntry("WSAsendmsg()", { param_entry{"socket", (uint64_t)s}, });
+    LogParamsEntry("WSAsendmsg()", { param_entry{"socket", (uint64_t)s}, }, t_wsa_send_msg);
     return var;
 }
 
@@ -205,7 +205,7 @@ int hooked_recv(SOCKET s, char* buf, int len, int flags) {
     global_io_recv_log.log(actual_bytes_recieved);
     log_malloc(actual_bytes_recieved);
 
-    LogParamsEntry("recv()", { param_entry{"socket", (uint64_t)s}, });
+    LogParamsEntry("recv()", { param_entry{"socket", (uint64_t)s}, }, t_recv);
     return len_recieved;
 }
 
@@ -229,7 +229,7 @@ int hooked_recv_from(SOCKET s, char* buf, int len, int flags, sockaddr* from, in
     global_io_recv_log.log(actual_bytes_recieved);
     log_malloc(actual_bytes_recieved);
 
-    LogParamsEntry("recv_from()", { param_entry{"socket", (uint64_t)s}, });
+    LogParamsEntry("recv_from()", { param_entry{"socket", (uint64_t)s}, }, t_recv_from);
     return len_recieved;
 }
 
@@ -264,7 +264,7 @@ int hooked_wsa_recv(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD l
     global_io_recv_log.log(event->wsarecv.bytes_recived);
     event->wsarecv.completion_routine = lpCompletionRoutine;
 
-    LogParamsEntry("wsa_recv()", { param_entry{"socket", (uint64_t)s}, });
+    LogParamsEntry("wsa_recv()", { param_entry{"socket", (uint64_t)s}, }, t_wsa_recv);
     return error;
 }
 typedef int (WSAAPI* wsa_recv_from_func)(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesRecvd, LPDWORD lpFlags, sockaddr* lpFrom, LPINT lpFromlen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
@@ -302,7 +302,7 @@ int hooked_wsa_recv_from(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDW
     global_io_recv_log.log(event->wsarecvfrom.bytes_recived);
     event->wsarecvfrom.completion_routine = lpCompletionRoutine;
 
-    LogParamsEntry("wsa_recv_from()", { param_entry{"socket", (uint64_t)s}, });
+    LogParamsEntry("wsa_recv_from()", { param_entry{"socket", (uint64_t)s}, }, t_wsa_recv_from);
     return error;
 }
 
@@ -323,7 +323,7 @@ HINTERNET hooked_win_http_open(LPCWSTR pszAgentW, DWORD dwAccessType, LPCWSTR ps
     event->http_open.proxy = LPCWSTRToString(pszProxyW);
     event->http_open.proxy_bypass = LPCWSTRToString(pszProxyBypassW);
     event->http_open.flags = dwFlags;
-    LogParamsEntry("win_http_open()", { param_entry{"hInternet", (uint64_t)result}, });
+    LogParamsEntry("win_http_open()", { param_entry{"hInternet", (uint64_t)result}, }, t_http_open);
     return result;
 }
 
@@ -340,7 +340,7 @@ BOOL hooked_win_http_close_handle(HINTERNET hInternet) {
     auto event = LogSocketEvent((SOCKET)session, t_http_close, "win_http_close_handle()", &log, 0);
     log->source_type = st_WinHttp;
 
-    LogParamsEntry("win_http_close_handle()", {});
+    LogParamsEntry("win_http_close_handle()", {}, t_http_close);
     return result;
 }
 
@@ -366,7 +366,7 @@ HINTERNET hooked_win_http_connect(HINTERNET hSession, LPCWSTR pswzServerName, IN
         memcpy(log->custom_label, event->http_connect.server_name.c_str(), name_length >= socket_custom_label_len ? socket_custom_label_len-1 : name_length);
     }
 
-    LogParamsEntry("win_http_connect()", {});
+    LogParamsEntry("win_http_connect()", {}, t_http_connect);
     return result;
 }
 
@@ -397,7 +397,7 @@ HINTERNET hooked_win_http_open_request(HINTERNET hConnect, LPCWSTR pwszVerb, LPC
     }}
 
 
-    LogParamsEntry("win_http_open_request()", {});
+    LogParamsEntry("win_http_open_request()", {}, t_http_open_request);
     return result;
 }
 
@@ -416,7 +416,7 @@ BOOL hooked_win_http_add_request_headers(HINTERNET hRequest, LPCWSTR lpszHeaders
     event->http_add_request_headers.headers = LPCWSTRToString(lpszHeaders, dwHeadersLength);
     event->http_add_request_headers.modifiers = dwModifiers;
 
-    LogParamsEntry("win_http_add_request_headers()", {});
+    LogParamsEntry("win_http_add_request_headers()", {}, t_http_add_request_headers);
     return result;
 }
 
@@ -444,7 +444,7 @@ BOOL hooked_win_http_send_request(HINTERNET hRequest, LPCWSTR lpszHeaders, DWORD
     log->total_send_log.log(data_sent);
     global_http_send_log.log(data_sent);
 
-    LogParamsEntry("win_http_send_request()", {});
+    LogParamsEntry("win_http_send_request()", {}, t_http_send_request);
     return result;
 }
 
@@ -469,7 +469,7 @@ BOOL hooked_win_http_write_data(HINTERNET hRequest, LPCVOID lpBuffer, DWORD dwNu
     log->total_send_log.log(dwNumberOfBytesToWrite);
     global_http_send_log.log(dwNumberOfBytesToWrite);
 
-    LogParamsEntry("win_http_write_data()", {});
+    LogParamsEntry("win_http_write_data()", {}, t_http_write_data);
     return result;
 }
 
@@ -498,7 +498,7 @@ BOOL hooked_win_http_read_data(HINTERNET hRequest, LPVOID lpBuffer, DWORD dwNumb
     log->total_recv_log.log(size_in_read_buffer);
     global_http_recv_log.log(size_in_read_buffer);
 
-    LogParamsEntry("win_http_read_data()", {});
+    LogParamsEntry("win_http_read_data()", {}, t_http_read_data);
     return result;
 }
 
@@ -528,7 +528,7 @@ BOOL hooked_win_http_query_headers(HINTERNET hRequest, DWORD dwInfoLevel, LPCWST
     log->total_recv_log.log(*lpdwBufferLength);
     global_http_recv_log.log(*lpdwBufferLength);
 
-    LogParamsEntry("win_http_query_headers()", {});
+    LogParamsEntry("win_http_query_headers()", {}, t_http_query_headers);
     return result;
 }
 
@@ -542,60 +542,60 @@ bool LoadHooks() {
     if (MH_Initialize() != MH_OK) return false;
 
     if (!HookMacro(&send, &hooked_send, &send_func_ptr)) return false;
-    LogEntry("send hooked");
+    LogEntry("send hooked", t_generic_log);
     //LogParamsEntry("send func hooked", { param_entry{"prev_address", (uint64_t)&send}, param_entry{"override_address", (uint64_t)&hooked_send}, param_entry{"trampoline_address", (uint64_t)&send_func_ptr} });
 
     if (!HookMacro(&sendto, &hooked_sendto, &sendto_func_ptr)) return false;
-    LogEntry("sendto hooked");
+    LogEntry("sendto hooked", t_generic_log);
 
     if (!HookMacro(&WSASend, &hooked_WSAsend, &WSAsend_func_ptr)) return false;
-    LogEntry("WSAsend hooked");
+    LogEntry("WSAsend hooked", t_generic_log);
 
     if (!HookMacro(&WSASendTo, &hooked_WSAsendto, &WSAsendto_func_ptr)) return false;
-    LogEntry("WSAsendto hooked");
+    LogEntry("WSAsendto hooked", t_generic_log);
 
     if (!HookMacro(&WSASendMsg, &hooked_WSAsendmsg, &WSAsendmsg_func_ptr)) return false;
-    LogEntry("WSAsendmsg hooked");
+    LogEntry("WSAsendmsg hooked", t_generic_log);
 
     if (!HookMacro(&recv, &hooked_recv, &recv_func_ptr)) return false;
-    LogEntry("recv hooked");
+    LogEntry("recv hooked", t_generic_log);
 
     if (!HookMacro(&recvfrom, &hooked_recv_from, &recv_from_func_ptr)) return false;
-    LogEntry("recvfrom hooked");
+    LogEntry("recvfrom hooked", t_generic_log);
 
     if (!HookMacro(&WSARecv, &hooked_wsa_recv, &wsa_recv_func_ptr)) return false;
-    LogEntry("wsarecv hooked");
+    LogEntry("wsarecv hooked", t_generic_log);
 
     if (!HookMacro(&WSARecvFrom, &hooked_wsa_recv_from, &wsa_recv_from_func_ptr)) return false;
-    LogEntry("wsarecvfrom hooked");
+    LogEntry("wsarecvfrom hooked", t_generic_log);
 
     // set hooks for all win HTTP stuff
     if (!HookMacro(&WinHttpOpen, &hooked_win_http_open, &win_http_open_ptr)) return false;
-    LogEntry("http open hooked");
+    LogEntry("http open hooked", t_generic_log);
 
     if (!HookMacro(&WinHttpCloseHandle, &hooked_win_http_close_handle, &win_http_close_handle_ptr)) return false; 
-    LogEntry("http close handle hooked");
+    LogEntry("http close handle hooked", t_generic_log);
 
     if (!HookMacro(&WinHttpConnect, &hooked_win_http_connect, &win_http_connect_ptr)) return false;
-    LogEntry("http connect hooked");
+    LogEntry("http connect hooked", t_generic_log);
 
     if (!HookMacro(&WinHttpOpenRequest, &hooked_win_http_open_request, &win_http_open_request_ptr)) return false;
-    LogEntry("http open request hooked");
+    LogEntry("http open request hooked", t_generic_log);
     
     if (!HookMacro(&WinHttpAddRequestHeaders, &hooked_win_http_add_request_headers, &win_http_add_request_headers_ptr)) return false;
-    LogEntry("http add request headers hooked");
+    LogEntry("http add request headers hooked", t_generic_log);
 
     if (!HookMacro(&WinHttpSendRequest, &hooked_win_http_send_request, &win_http_send_request_ptr)) return false;
-    LogEntry("http send request hooked");
+    LogEntry("http send request hooked", t_generic_log);
 
     if (!HookMacro(&WinHttpWriteData, &hooked_win_http_write_data, &win_http_write_data_ptr)) return false;
-    LogEntry("http write data hooked");
+    LogEntry("http write data hooked", t_generic_log);
 
     if (!HookMacro(&WinHttpReadData, &hooked_win_http_read_data, &win_http_read_data_ptr)) return false;
-    LogEntry("http read data hooked");
+    LogEntry("http read data hooked", t_generic_log);
 
     if (!HookMacro(&WinHttpQueryHeaders, &hooked_win_http_query_headers, &win_http_query_headers_ptr)) return false;
-    LogEntry("http query headers hooked");
+    LogEntry("http query headers hooked", t_generic_log);
 
 
     return true;

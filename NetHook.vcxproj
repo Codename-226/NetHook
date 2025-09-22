@@ -166,7 +166,9 @@
     <ClInclude Include="SRC\GUI\imgui\imstb_textedit.h" />
     <ClInclude Include="SRC\GUI\imgui\imstb_truetype.h" />
     <ClInclude Include="SRC\GUI\Window.h" />
+    <ClInclude Include="SRC\Hooking\DebugUtils.h" />
     <ClInclude Include="SRC\Hooking\Hooks.h" />
+    <ClInclude Include="SRC\Hooking\LooseStructs.h" />
     <ClInclude Include="SRC\Hooking\ParamHelper.h" />
     <ClInclude Include="SRC\Loggers\DumpLog.h" />
     <ClInclude Include="SRC\Loggers\EventLog.h" />
@@ -174,6 +176,7 @@
     <ClInclude Include="SRC\Loggers\HTTPLog.h" />
     <ClInclude Include="SRC\Loggers\PerformanceLog.h" />
     <ClInclude Include="SRC\Loggers\SocketLog.h" />
+    <ClInclude Include="SRC\SaveState.h" />
     <ClInclude Include="SRC\shared_structs.h" />
   </ItemGroup>
   <ItemGroup>

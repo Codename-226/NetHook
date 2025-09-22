@@ -170,8 +170,19 @@ void display_iolog_details(const char* log_label, IOLog* log) {
     else ImGui::Text("total %dmb", (int)(log->cached_total / 1000000));
 }
 
-// gets string containing 16 characters, delimited if too long
-std::string BufferShortPreview(vector<char> preview_buffer) {
+void displayLogFilter(const char* context, socket_event_type filter) {
+
+    static bool enabled = GetLogFilter(filter);
+    if (ImGui::MenuItem(context, 0, &enabled)) {
+        UpdateLogFilter(filter, enabled);
+        if (enabled)
+            LogEntry("log filter enabled", t_generic_log);
+        else LogEntry("log filter disabled", t_generic_log);
+    }
+}
+
+// gets string containing 16 characters, delimited if too long, or prints out the whole thing because why not
+std::string BufferShortPreview(vector<char> preview_buffer, int maxbytes = 32) {
     //const int buffer_size = 48;
     //char buffer[buffer_size+1];
     //// if preview is too big to fit in buffer, put as many as we can and delimit
@@ -188,14 +199,13 @@ std::string BufferShortPreview(vector<char> preview_buffer) {
     std::stringstream ss;
     for (int i = 0; i < preview_buffer.size(); i++) {
         ss << std::setfill('0') << std::setw(2) << std::hex << (0xff & (unsigned int)preview_buffer[i]) << " ";
-        if (i >= 32) { ss << "..."; break; };
+        if (maxbytes && i >= maxbytes) { ss << "..."; break; };
     }
     return ss.str();
 }
 
 // Main code
-int injected_window_main()
-{
+int injected_window_main(){
     // Create application window
     //ImGui_ImplWin32_EnableDpiAwareness();
 
@@ -250,6 +260,7 @@ int injected_window_main()
     // Our state
     bool show_demo_window = false;
     bool show_plot_demo_window = false;
+    bool show_console_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -296,21 +307,70 @@ int injected_window_main()
             if (ImGui::BeginMenu("Windows")) {
                 ImGui::MenuItem("ImGui Demo", nullptr, &show_demo_window);
                 ImGui::MenuItem("ImPlot Demo", nullptr, &show_plot_demo_window);
+                if (ImGui::BeginMenu("Console")) {
+                    ImGui::MenuItem("Open", nullptr, &show_console_window);
+                    if (ImGui::MenuItem("Clear"))
+                        ClearLogs();
+                    if (ImGui::MenuItem("Export"))
+                        DumpToNotepad(string(logs.buffer));
+                    ImGui::EndMenu();
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Edit")) {
-                if (ImGui::MenuItem("Apply HTTP config", nullptr, nullptr)) {
-                    focus_http = true;
-                    filter_by_has_custom_name = true;
-                    filter_by_is_socket = true;
-                    filter_by_is_http = false;
+                if (ImGui::BeginMenu("Log Filters")) {
+                    displayLogFilter("Exclude Send", t_send);
+                    displayLogFilter("Exclude Sendto", t_send_to);
+                    displayLogFilter("Exclude WSASend", t_wsa_send);
+                    displayLogFilter("Exclude WSASendTo", t_wsa_send_to); 
+                    displayLogFilter("Exclude WSASendMsg", t_wsa_send_msg); 
+                    displayLogFilter("Exclude Recv", t_recv);
+                    displayLogFilter("Exclude RecvFrom", t_recv_from);
+                    displayLogFilter("Exclude WSARecv", t_wsa_recv);
+                    displayLogFilter("Exclude WSARecvFrom", t_wsa_recv_from);
+                    displayLogFilter("Exclude HTTP Open", t_http_open);
+                    displayLogFilter("Exclude HTTP Close", t_http_close);
+                    displayLogFilter("Exclude HTTP Connect", t_http_connect);
+                    displayLogFilter("Exclude HTTP Open Request", t_http_open_request);
+                    displayLogFilter("Exclude HTTP Add Request Headers", t_http_add_request_headers);
+                    displayLogFilter("Exclude HTTP Send Request", t_http_send_request);
+                    displayLogFilter("Exclude HTTP Write Data", t_http_write_data);
+                    displayLogFilter("Exclude HTTP Read Data", t_http_read_data);
+                    displayLogFilter("Exclude HTTP Query Headers", t_http_query_headers);
+                    displayLogFilter("Exclude Error Log", t_error_log);
+                    displayLogFilter("Exclude Generic Log", t_generic_log);
+                    displayLogFilter("Exclude Uncategorized Log", t_uncategorized);
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Configs")) {
+                    if (ImGui::MenuItem("Apply HTTP config", nullptr, nullptr)) {
+                        focus_http = true;
+                        filter_by_has_custom_name = true;
+                        filter_by_is_socket = true;
+                        filter_by_is_http = false;
+                    }
+                    if (ImGui::MenuItem("Apply SOCKET config", nullptr, nullptr)) {
+                        focus_http = false;
+                        filter_by_has_custom_name = false;
+                        filter_by_is_socket = false;
+                        filter_by_is_http = true;
+                    }
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Save Configs"))
+                        SaveConfigs();
+                    if (ImGui::MenuItem("Revert To Saved"))
+                        LoadConfigs();
+                    ImGui::EndMenu();
                 }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Tools")) {
-                if (ImGui::MenuItem("Dump All HTTP", nullptr, nullptr)) {
+                if (ImGui::MenuItem("Dump All HTTP", nullptr, nullptr))
                     DumpAllHTTPEvents();
-                }
+                if (!is_process_suspended && ImGui::MenuItem("Freeze Process", nullptr, nullptr)) 
+                    FreezeProcess();
+                if (is_process_suspended && ImGui::MenuItem("Resume Process", nullptr, nullptr))
+                    ResumeProcess();
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
@@ -320,6 +380,13 @@ int injected_window_main()
             ImGui::ShowDemoWindow(&show_demo_window);
         if (show_plot_demo_window)
             ImPlot::ShowDemoWindow(&show_plot_demo_window);
+        if (show_console_window) {
+            if (ImGui::Begin("Console Output", &show_console_window, ImGuiWindowFlags_HorizontalScrollbar)) {
+                ImGui::TextUnformatted(logs.buffer);
+                ImGui::End();
+            }
+
+        }
 
 
         {
@@ -357,13 +424,13 @@ int injected_window_main()
                     if (ImGui::Button("Export"))
                         DumpToNotepad(display);
                     
-                    ImGui::Text(display.c_str());
+                    ImGui::TextUnformatted(display.c_str());
+                    ImGui::End();
                 } 
                 if (!my_window_open) {
                     previewed_https.erase(previewed_https.begin() + i);
                     i--;
                 }
-                ImGui::End();
                 ImGui::PopID();
             }
 
@@ -471,6 +538,8 @@ int injected_window_main()
                 }
             }
             ImGui::SetCursorPos(ogCursorPos);
+
+
 
             if (ImPlot::BeginPlot("IO", ImVec2(-1, 0), ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_NoMouseText | ImPlotFlags_NoInputs | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoFrame)) {
                 ImPlot::SetupAxes(0, 0, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoGridLines);
@@ -793,11 +862,11 @@ int injected_window_main()
 
 
                                 ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(-1, 0));
-                                for (int i = element_index; i <= last_index; i++) { 
+                                for (int i = element_index; i <= last_index; i++) {
                                     // get element index
 
                                     ImGui::PushID(i); // Push a unique ID for each element
-                                    socket_log_entry* curr_loggy = selected_socket->events[i]; 
+                                    socket_log_entry* curr_loggy = selected_socket->events[i];
                                     if (ImGui::Selectable("##selec", i == selected_socket->log_event_index_focused, 0, ImVec2(0, elementHeight)))
                                         selected_socket->log_event_index_focused = i;
                                     ImGui::SameLine();
@@ -807,35 +876,35 @@ int injected_window_main()
                                     // param1: 123 | param2: 234 | param3: 345
                                     ImGui::Text("%d - %s | %s | ", i, nanosecondsToTimestamp(curr_loggy->timestamp).c_str(), curr_loggy->name);
                                     ImGui::SameLine();
-                                    if      (curr_loggy->category == c_create ) ImGui::Text("create  ");
-                                    else if (curr_loggy->category == c_send   ) ImGui::Text("send    ");
+                                    if (curr_loggy->category == c_create) ImGui::Text("create  ");
+                                    else if (curr_loggy->category == c_send) ImGui::Text("send    ");
                                     else if (curr_loggy->category == c_recieve) ImGui::Text("receive ");
-                                    else if (curr_loggy->category == c_info   ) ImGui::Text("info    ");
-                                    else if (curr_loggy->category == c_http   ) ImGui::Text("http    ");
+                                    else if (curr_loggy->category == c_info) ImGui::Text("info    ");
+                                    else if (curr_loggy->category == c_http) ImGui::Text("http    ");
                                     ImGui::SameLine();
                                     switch (curr_loggy->type) {
-                                        case t_send:                     ImGui::Text("(Send)              "); break;
-                                        case t_send_to:                  ImGui::Text("(SendTo)            "); break;
-                                        case t_wsa_send:                 ImGui::Text("(WSASend)           "); break;
-                                        case t_wsa_send_to:              ImGui::Text("(WSASendTo)         "); break;
-                                        case t_wsa_send_msg:             ImGui::Text("(WSASendMsg)        "); break;
-                                        case t_recv:                     ImGui::Text("(Recv)              "); break;
-                                        case t_recv_from:                ImGui::Text("(RecvFrom)          "); break;
-                                        case t_wsa_recv:                 ImGui::Text("(WSARecv)           "); break;
-                                        case t_wsa_recv_from:            ImGui::Text("(WSARecvFrom)       "); break;
-                                        case t_http_open:                ImGui::Text("(HTTPOpen)          "); break;
-                                        case t_http_close:               ImGui::Text("(HTTPClose)         "); break;
-                                        case t_http_connect:             ImGui::Text("(HTTPConnect)       "); break;
-                                        case t_http_open_request:        ImGui::Text("(HTTPOpenRequest)   "); break;
-                                        case t_http_add_request_headers: ImGui::Text("(HTTPRequestHeaders)"); break;
-                                        case t_http_send_request:        ImGui::Text("(HTTPSendRequest)   "); break;
-                                        case t_http_write_data:          ImGui::Text("(HTTPWriteData)     "); break;
-                                        case t_http_read_data:           ImGui::Text("(HTTPReadData)      "); break;
-                                        case t_http_query_headers:       ImGui::Text("(HTTPQueryHeaders)  "); break;
+                                    case t_send:                     ImGui::Text("(Send)              "); break;
+                                    case t_send_to:                  ImGui::Text("(SendTo)            "); break;
+                                    case t_wsa_send:                 ImGui::Text("(WSASend)           "); break;
+                                    case t_wsa_send_to:              ImGui::Text("(WSASendTo)         "); break;
+                                    case t_wsa_send_msg:             ImGui::Text("(WSASendMsg)        "); break;
+                                    case t_recv:                     ImGui::Text("(Recv)              "); break;
+                                    case t_recv_from:                ImGui::Text("(RecvFrom)          "); break;
+                                    case t_wsa_recv:                 ImGui::Text("(WSARecv)           "); break;
+                                    case t_wsa_recv_from:            ImGui::Text("(WSARecvFrom)       "); break;
+                                    case t_http_open:                ImGui::Text("(HTTPOpen)          "); break;
+                                    case t_http_close:               ImGui::Text("(HTTPClose)         "); break;
+                                    case t_http_connect:             ImGui::Text("(HTTPConnect)       "); break;
+                                    case t_http_open_request:        ImGui::Text("(HTTPOpenRequest)   "); break;
+                                    case t_http_add_request_headers: ImGui::Text("(HTTPRequestHeaders)"); break;
+                                    case t_http_send_request:        ImGui::Text("(HTTPSendRequest)   "); break;
+                                    case t_http_write_data:          ImGui::Text("(HTTPWriteData)     "); break;
+                                    case t_http_read_data:           ImGui::Text("(HTTPReadData)      "); break;
+                                    case t_http_query_headers:       ImGui::Text("(HTTPQueryHeaders)  "); break;
                                     }
                                     ImGui::SameLine();
                                     if (curr_loggy->error_code)
-                                        ImGui::TextColored({255,0,0,255}, " %s", ErrorCodeToString(curr_loggy->error_code).c_str());
+                                        ImGui::TextColored({ 255,0,0,255 }, " %s", ErrorCodeToString(curr_loggy->error_code).c_str());
 
                                     ImGui::EndGroup();
                                     ImGui::PopID();
@@ -888,67 +957,97 @@ int injected_window_main()
 
                                     // fill in variable details stuff here!!
                                     switch (curr_loggy->type) {
-                                    // SEND CLASS UI //
+                                        // SEND CLASS UI //
                                     case t_send: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.send.flags);
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.send.buffer.size(), BufferShortPreview(curr_loggy->data.send.buffer).c_str());
+                                        if (ImGui::Button("Copy#1")){ CopyToClipboard(BufferShortPreview(curr_loggy->data.send.buffer, 0)); }
                                         break;}
                                     case t_send_to: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.sendto.flags);
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.sendto.buffer.size(), BufferShortPreview(curr_loggy->data.sendto.buffer).c_str());
+                                        if (ImGui::Button("Copy#1")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.sendto.buffer, 0)); }
                                         ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.sendto.to.size(), BufferShortPreview(curr_loggy->data.sendto.to).c_str());
+                                        if (ImGui::Button("Copy#2")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.sendto.to, 0)); }
                                         break;}
                                     case t_wsa_send: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsasend.flags);
                                         ImGui::Text("sent: 0x%x", curr_loggy->data.wsasend.bytes_sent);
                                         ImGui::Text("callback: 0x%llx", curr_loggy->data.wsasend.completion_routine);
-                                        for (int i = 0; i < curr_loggy->data.wsasend.buffer.size(); i++)
+                                        for (int i = 0; i < curr_loggy->data.wsasend.buffer.size(); i++) {
                                             ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsasend.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsasend.buffer[i]).c_str());
+                                            ImGui::PushID(i);
+                                            if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasend.buffer[i], 0)); }
+                                            ImGui::PopID();
+                                        }
                                         break;}
                                     case t_wsa_send_to: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsasendto.flags);
                                         ImGui::Text("sent: 0x%x", curr_loggy->data.wsasendto.bytes_sent);
                                         ImGui::Text("callback: 0x%llx", curr_loggy->data.wsasendto.completion_routine);
-                                        for (int i = 0; i < curr_loggy->data.wsasendto.buffer.size(); i++)
+                                        for (int i = 0; i < curr_loggy->data.wsasendto.buffer.size(); i++) {
                                             ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsasendto.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsasendto.buffer[i]).c_str());
+                                            ImGui::PushID(i);
+                                            if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendto.buffer[i], 0)); }
+                                            ImGui::PopID();
+                                        }
                                         ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.wsasendto.to.size(), BufferShortPreview(curr_loggy->data.wsasendto.to).c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendto.to, 0)); }
                                         break;}
                                     case t_wsa_send_msg: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsasendmsg.flags);
                                         ImGui::Text("msg flags: 0x%x", curr_loggy->data.wsasendmsg.msg_flags);
                                         ImGui::Text("sent: 0x%x", curr_loggy->data.wsasendmsg.bytes_sent);
                                         ImGui::Text("callback: 0x%llx", curr_loggy->data.wsasendmsg.completion_routine);
-                                        for (int i = 0; i < curr_loggy->data.wsasendmsg.buffer.size(); i++)
+                                        for (int i = 0; i < curr_loggy->data.wsasendmsg.buffer.size(); i++) {
                                             ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsasendmsg.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsasendmsg.buffer[i]).c_str());
+                                            ImGui::PushID(i);
+                                            if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendmsg.buffer[i], 0)); }
+                                            ImGui::PopID();
+                                        }
                                         ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.wsasendmsg.to.size(), BufferShortPreview(curr_loggy->data.wsasendmsg.to).c_str());
+                                        if (ImGui::Button("Copy#1")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendmsg.to, 0)); }
                                         ImGui::Text("control: 0x%llx [%s]", curr_loggy->data.wsasendmsg.control_buffer.size(), BufferShortPreview(curr_loggy->data.wsasendmsg.control_buffer).c_str());
+                                        if (ImGui::Button("Copy#2")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendmsg.control_buffer, 0)); }
                                         break;}
                                     // RECIEVE CLASS UI //
                                     case t_recv: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.recv.flags);
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.recv.buffer.size(), BufferShortPreview(curr_loggy->data.recv.buffer).c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.recv.buffer, 0)); }
                                         break;}
                                     case t_recv_from: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.recvfrom.flags);
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.recvfrom.buffer.size(), BufferShortPreview(curr_loggy->data.recvfrom.buffer).c_str());
+                                        if (ImGui::Button("Copy#1")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.recvfrom.buffer, 0)); }
                                         ImGui::Text("from: 0x%llx [%s]", curr_loggy->data.recvfrom.from.size(), BufferShortPreview(curr_loggy->data.recvfrom.from).c_str());
+                                        if (ImGui::Button("Copy#2")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.recvfrom.from, 0)); }
                                         break;}
                                     case t_wsa_recv: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsarecv.flags);
                                         ImGui::Text("out flags: 0x%x", curr_loggy->data.wsarecv.out_flags);
                                         ImGui::Text("sent: 0x%x", curr_loggy->data.wsarecv.bytes_recived);
                                         ImGui::Text("callback: 0x%llx", curr_loggy->data.wsarecv.completion_routine);
-                                        for (int i = 0; i < curr_loggy->data.wsarecv.buffer.size(); i++)
+                                        for (int i = 0; i < curr_loggy->data.wsarecv.buffer.size(); i++){
                                             ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsarecv.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsarecv.buffer[i]).c_str());
+                                            ImGui::PushID(i);
+                                            if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsarecv.buffer[i], 0)); }
+                                            ImGui::PopID();
+                                        }
                                         break;}
                                     case t_wsa_recv_from: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsarecvfrom.flags);
                                         ImGui::Text("out flags: 0x%x", curr_loggy->data.wsarecvfrom.out_flags);
                                         ImGui::Text("sent: 0x%x", curr_loggy->data.wsarecvfrom.bytes_recived);
                                         ImGui::Text("callback: 0x%llx", curr_loggy->data.wsarecvfrom.completion_routine);
-                                        for (int i = 0; i < curr_loggy->data.wsarecvfrom.buffer.size(); i++)
+                                        for (int i = 0; i < curr_loggy->data.wsarecvfrom.buffer.size(); i++){
                                             ImGui::Text("data[%d]: 0x%llx [%s]", i, curr_loggy->data.wsarecvfrom.buffer[i].size(), BufferShortPreview(curr_loggy->data.wsarecvfrom.buffer[i]).c_str());
+                                            ImGui::PushID(i);
+                                            if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsarecvfrom.buffer[i], 0)); }
+                                            ImGui::PopID();
+                                        }
                                         ImGui::Text("from: 0x%llx [%s]", curr_loggy->data.wsarecvfrom.from.size(), BufferShortPreview(curr_loggy->data.wsarecvfrom.from).c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsarecvfrom.from, 0)); }
                                         break;}
                                     // HTTP CLASS UI //
                                     case t_http_open: {

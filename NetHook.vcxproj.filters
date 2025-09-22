@@ -99,6 +99,15 @@
     <ClInclude Include="SRC\Loggers\DumpLog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SRC\Hooking\DebugUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SRC\Hooking\LooseStructs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SRC\SaveState.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">

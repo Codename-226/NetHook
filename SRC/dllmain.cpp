@@ -20,23 +20,29 @@ using namespace std;
 
 //#include <atlstr.h>
 
+#include "Hooking/LooseStructs.h"
 #include "Loggers/EventLog.h"
 #include "Loggers/DumpLog.h"
 #include "Loggers/PerformanceLog.h"
 #include "Loggers/SocketLog.h"
 #include "Loggers/HTTPLog.h";
 #include "Hooking/Hooks.h"
+#include "Hooking/DebugUtils.h"
 
 #include "GUI/Window.h"
+#include "SaveState.h"
 
 #include <thread>
+// forward declares
+void LoadConfigs(); void SaveConfigs();
 
 void Main() {
+    LoadConfigs(); // make sure that our preferences are loaded before we actually do anything that outputs to log.
     InitEventLog();
     LoadHooks();
 
     std::thread(injected_window_main).detach();
-    LogEntry("Finished Init");
+    LogEntry("Finished Init", t_generic_log);
 }
 
 
@@ -45,14 +51,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 
     switch (ul_reason_for_call){
     case DLL_PROCESS_ATTACH:
-        LogEntry("Process Attach");
+        LogEntry("Process Attach", t_generic_log);
         Main();
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
         break;
     case DLL_PROCESS_DETACH:
-        LogEntry("Process Detach");
+        LogEntry("Process Detach", t_generic_log);
         UnloadHooks();
         break;
     }
