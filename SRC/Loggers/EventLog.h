@@ -5,14 +5,7 @@
 #include <sstream>
 #include "../shared_structs.h"
 socket_event_type filter_out_log_types = t_none;
-void UpdateLogFilter(socket_event_type type, bool state) {
-	filter_out_log_types = type;
-	if (state) filter_out_log_types = (socket_event_type)((int)filter_out_log_types | (int)type);
-	else filter_out_log_types = (socket_event_type)((int)filter_out_log_types & ~(int)type);
-}
-inline socket_event_type GetLogFilter(socket_event_type type) {
-	return (socket_event_type)((int)type & (int)filter_out_log_types);
-}
+
 
 LogData logs = {};
 extern "C" __declspec(dllexport) void* GetLogDataPtr() { return &logs; }
@@ -126,4 +119,13 @@ void LogEntry(const char* entry, socket_event_type type = t_uncategorized) {
 	logs.buffer[logs.used]   = '\n';
 	logs.buffer[logs.used+1] = '\0';
 	logs.used += 1;
+}
+
+void UpdateLogFilter(socket_event_type type, bool state) {
+	//filter_out_log_types = type;
+	if (state) filter_out_log_types = (socket_event_type)((int)filter_out_log_types | (int)type);
+	else filter_out_log_types = (socket_event_type)((int)filter_out_log_types & ~((int)type));
+}
+inline bool GetLogFilter(socket_event_type type) {
+	return (bool)(((int)type) & ((int)filter_out_log_types));
 }

@@ -1,5 +1,7 @@
 #define _HAS_STD_BYTE 0
 
+// forward declares
+void LoadConfigs(); void SaveConfigs();
 
 
 
@@ -33,8 +35,6 @@ using namespace std;
 #include "SaveState.h"
 
 #include <thread>
-// forward declares
-void LoadConfigs(); void SaveConfigs();
 
 void Main() {
     LoadConfigs(); // make sure that our preferences are loaded before we actually do anything that outputs to log.

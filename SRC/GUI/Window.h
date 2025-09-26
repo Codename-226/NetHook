@@ -172,7 +172,7 @@ void display_iolog_details(const char* log_label, IOLog* log) {
 
 void displayLogFilter(const char* context, socket_event_type filter) {
 
-    static bool enabled = GetLogFilter(filter);
+    bool enabled = GetLogFilter(filter);
     if (ImGui::MenuItem(context, 0, &enabled)) {
         UpdateLogFilter(filter, enabled);
         if (enabled)
@@ -362,6 +362,13 @@ int injected_window_main(){
                         LoadConfigs();
                     ImGui::EndMenu();
                 }
+                ImGui::Separator();
+                float graph_speed_adjust = time_factor;
+                ImGui::Text("Graph Speed");
+                // NOTE: this widget should be disabled when our process is paused, however theres no api for that? so just leave it enabled since it just gives more control to the user
+                if (ImGui::SliderFloat("##Graph Speed slider", &graph_speed_adjust, 0.0f, 5.0f))
+                    IO_UpdateTimeFactor(graph_speed_adjust);
+                
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Tools")) {
@@ -383,9 +390,9 @@ int injected_window_main(){
         if (show_console_window) {
             if (ImGui::Begin("Console Output", &show_console_window, ImGuiWindowFlags_HorizontalScrollbar)) {
                 ImGui::TextUnformatted(logs.buffer);
-                ImGui::End();
+                
             }
-
+            ImGui::End();
         }
 
 
@@ -404,7 +411,9 @@ int injected_window_main(){
                     size_symbol = "kb";
                 }
                 char final_string[256];
-                snprintf(final_string, sizeof(final_string), "RAM %d%s | %.3fms | %.1f FPS", allocated, size_symbol, 1000.0f / io.Framerate, io.Framerate);
+                if (is_process_suspended) 
+                     snprintf(final_string, sizeof(final_string), "PROCESS PAUSED | RAM %d%s | %.1f FPS", allocated, size_symbol, io.Framerate);
+                else snprintf(final_string, sizeof(final_string),                  "RAM %d%s | %.1f FPS", allocated, size_symbol, io.Framerate);
             
                 // shift text to the right side
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(final_string).x));
@@ -752,9 +761,9 @@ int injected_window_main(){
                             if (soc_logs->total_recv_log.total < 1000)
                                 ImGui::Text("| Dat recv: %db", soc_logs->total_recv_log.total);
                             else if (soc_logs->total_recv_log.total < 1000000)
-                                ImGui::Text("| Dat recv: %dkb", soc_logs->total_recv_log.total);
+                                ImGui::Text("| Dat recv: %dkb", soc_logs->total_recv_log.total / 1000);
                             else
-                                ImGui::Text("| Dat recv: %dmb", soc_logs->total_recv_log.total);
+                                ImGui::Text("| Dat recv: %dmb", soc_logs->total_recv_log.total / 1000000);
                         }
 
                         // Restore the original cursor position

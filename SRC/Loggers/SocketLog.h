@@ -9,13 +9,26 @@ long long seconds() {
 	auto now = std::chrono::system_clock::now();
 	return (long long)std::chrono::system_clock::to_time_t(now);
 }
+
+long long tf_change_timestamp = 0;
+long long factored_timestamp = 0;
+float time_factor = 1.0f;
+void IO_UpdateTimeFactor(float new_time_factor) {
+	double time = (double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() / 100.0;
+	long long time_elapsed_factored = trunc((time - tf_change_timestamp) * time_factor);
+	factored_timestamp += time_elapsed_factored;
+	tf_change_timestamp = time;
+	time_factor = new_time_factor;
+	LogParamsEntry("Time factor has now changed", { param_entry{"new value", (uint64_t)time_factor}, }, t_generic_log);
+}
 long long IO_history_timestamp() {
 	// currently once per second
 	//auto now = std::chrono::system_clock::now();
 	//return (long long)std::chrono::system_clock::to_time_t(now);
 	// 10 times a second
-	auto now = std::chrono::system_clock::now();
-	return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() / 100;
+	double time = (double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() / 100.0;
+	long long time_elapsed_factored = trunc((time - tf_change_timestamp) * time_factor);
+	return factored_timestamp + time_elapsed_factored;
 	// ???????? times a second
 	//auto now = std::chrono::high_resolution_clock::now();
 	//return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();

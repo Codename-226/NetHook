@@ -46,9 +46,12 @@ bool IsGraphicsThread(HANDLE hProcess, HANDLE hThread) {
     }
     return false;
 }
+float last_time_factor = 0.0f;
 void FreezeProcess() {
     if (is_process_suspended) return;
     is_process_suspended = true;
+    last_time_factor = time_factor;
+    IO_UpdateTimeFactor(0.0f);
     LogEntry("Process is now paused", t_generic_log);
 
     suspended_threads.clear();
@@ -112,6 +115,7 @@ void FreezeProcess() {
 void ResumeProcess() {
     if (!is_process_suspended) return;
     is_process_suspended = false;
+    IO_UpdateTimeFactor(last_time_factor);
     LogEntry("Process is now resumed", t_generic_log);
 
     for (HANDLE hThread : suspended_threads) {

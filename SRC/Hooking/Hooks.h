@@ -531,10 +531,42 @@ BOOL hooked_win_http_query_headers(HINTERNET hRequest, DWORD dwInfoLevel, LPCWST
     LogParamsEntry("win_http_query_headers()", {}, t_http_query_headers);
     return result;
 }
-
-
 //WINHTTPAPI BOOL WinHttpCreateUrl( LPURL_COMPONENTS lpUrlComponents, DWORD dwFlags, LPWSTR pwszUrl, LPDWORD pdwUrlLength);
 
+//hostent* WSAAPI gethostbyname(
+//    const char* name
+//);
+//
+//
+//typedef BOOL(*win_http_query_headers_func)(HINTERNET hRequest, DWORD dwInfoLevel, LPCWSTR pwszName, LPVOID lpBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex);
+//win_http_query_headers_func win_http_query_headers_ptr = NULL;
+//BOOL hooked_win_http_query_headers(HINTERNET hRequest, DWORD dwInfoLevel, LPCWSTR pwszName, LPVOID lpBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex) {
+//    //LogParamsEntry("begin win_http_query_headers()", {});
+//    int index_in = lpdwIndex ? *lpdwIndex : 0;
+//    auto result = win_http_query_headers_ptr(hRequest, dwInfoLevel, pwszName, lpBuffer, lpdwBufferLength, lpdwIndex);
+//    if (!lpBuffer || !lpdwBufferLength || !*lpdwBufferLength) return result; // skip if we have nothing to log??
+//
+//    auto session = get_request_parent(hRequest);
+//
+//    SocketLogs* log;
+//    auto event = LogSocketEvent((SOCKET)session, t_http_query_headers, "win_http_query_headers()", &log, result ? 0 : GetLastError());
+//    log->source_type = st_WinHttp;
+//
+//    event->http_query_headers.info_level = dwInfoLevel;
+//    event->http_query_headers.name = LPCWSTRToString(pwszName);
+//    event->http_query_headers.buffer = BytesToStringOrHex((char*)lpBuffer, *lpdwBufferLength);
+//    event->http_query_headers.index_in = index_in;
+//    event->http_query_headers.index_out = lpdwIndex ? *lpdwIndex : 0;
+//
+//    // log IO transaction
+//    log_malloc(*lpdwBufferLength);
+//    log->recvfrom_log.log(*lpdwBufferLength);
+//    log->total_recv_log.log(*lpdwBufferLength);
+//    global_http_recv_log.log(*lpdwBufferLength);
+//
+//    LogParamsEntry("win_http_query_headers()", {}, t_http_query_headers);
+//    return result;
+//}
 
 
 
