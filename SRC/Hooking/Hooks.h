@@ -533,42 +533,306 @@ BOOL hooked_win_http_query_headers(HINTERNET hRequest, DWORD dwInfoLevel, LPCWST
 }
 //WINHTTPAPI BOOL WinHttpCreateUrl( LPURL_COMPONENTS lpUrlComponents, DWORD dwFlags, LPWSTR pwszUrl, LPDWORD pdwUrlLength);
 
-//hostent* WSAAPI gethostbyname(
-//    const char* name
-//);
-//
-//
-//typedef BOOL(*win_http_query_headers_func)(HINTERNET hRequest, DWORD dwInfoLevel, LPCWSTR pwszName, LPVOID lpBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex);
-//win_http_query_headers_func win_http_query_headers_ptr = NULL;
-//BOOL hooked_win_http_query_headers(HINTERNET hRequest, DWORD dwInfoLevel, LPCWSTR pwszName, LPVOID lpBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex) {
-//    //LogParamsEntry("begin win_http_query_headers()", {});
-//    int index_in = lpdwIndex ? *lpdwIndex : 0;
-//    auto result = win_http_query_headers_ptr(hRequest, dwInfoLevel, pwszName, lpBuffer, lpdwBufferLength, lpdwIndex);
-//    if (!lpBuffer || !lpdwBufferLength || !*lpdwBufferLength) return result; // skip if we have nothing to log??
-//
-//    auto session = get_request_parent(hRequest);
-//
-//    SocketLogs* log;
-//    auto event = LogSocketEvent((SOCKET)session, t_http_query_headers, "win_http_query_headers()", &log, result ? 0 : GetLastError());
-//    log->source_type = st_WinHttp;
-//
-//    event->http_query_headers.info_level = dwInfoLevel;
-//    event->http_query_headers.name = LPCWSTRToString(pwszName);
-//    event->http_query_headers.buffer = BytesToStringOrHex((char*)lpBuffer, *lpdwBufferLength);
-//    event->http_query_headers.index_in = index_in;
-//    event->http_query_headers.index_out = lpdwIndex ? *lpdwIndex : 0;
-//
-//    // log IO transaction
-//    log_malloc(*lpdwBufferLength);
-//    log->recvfrom_log.log(*lpdwBufferLength);
-//    log->total_recv_log.log(*lpdwBufferLength);
-//    global_http_recv_log.log(*lpdwBufferLength);
-//
-//    LogParamsEntry("win_http_query_headers()", {}, t_http_query_headers);
-//    return result;
-//}
+
+typedef hostent* (*gethostbyname_func)(const char* name);
+gethostbyname_func gethostbyname_ptr = NULL;
+hostent* hooked_gethostbyname(const char* name) {
+
+    LogParamsEntry("hooked_gethostbyname()", {}, t_generic_log);
+    auto result = gethostbyname_ptr(name);
+    if (!result) return result; // skip if we have nothing to log??
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)-1, t_get_hostname, "gethostbyname()", &log, result ? 0 : GetLastError());
+
+    event->get_hostbyname.in_name = string(name);
+    event->get_hostbyname.name = string(result->h_name);
+    event->get_hostbyname.addrtype = result->h_addrtype;
+    event->get_hostbyname.length = result->h_length;
+
+    event->get_hostbyname.aliases = vector<string>();
+    auto var = result->h_aliases;
+    if (var) {
+        while (*var) {
+            event->get_hostbyname.aliases.push_back(string(*var));
+            var++; 
+    }}
+    event->get_hostbyname.addr_list = vector<string>();
+    var = result->h_addr_list;
+    if (var) {
+        while (*var) {
+            auto found_ip = string(inet_ntoa(*(in_addr*)(*var)));
+            event->get_hostbyname.addr_list.push_back(found_ip);
+
+            if (!event->get_hostbyname.name.empty() && event->get_hostbyname.name != "nil")
+                LogHost(found_ip, event->get_hostbyname.name);
+            else LogHost(found_ip, event->get_hostbyname.in_name);
+            var++;
+    }}
 
 
+    // log IO transaction
+    log->recv_log.log(1);
+    log->total_recv_log.log(1);
+
+    LogParamsEntry("gethostbyname()", {}, t_get_hostname);
+    return result;
+}
+
+
+
+__addr convert_addr_struct(sockaddr* addr) {
+    __addr thingo = {};
+    char str[INET6_ADDRSTRLEN];  // 46 bytes
+    if (addr->sa_family == AF_INET) {
+        sockaddr_in* ipv4 = (sockaddr_in*)addr;
+        thingo.sin_family = ipv4->sin_family;
+        thingo.sin_port = ipv4->sin_port;
+        thingo.IP = inet_ntop(AF_INET, &ipv4->sin_addr, str, INET_ADDRSTRLEN);
+    }
+    else if (addr->sa_family == AF_INET6) {
+        sockaddr_in6* ipv6 = (sockaddr_in6*)addr;
+        thingo.sin_family = ipv6->sin6_family;
+        thingo.sin_port = ipv6->sin6_port;
+        thingo.sin6_flowinfo = ipv6->sin6_flowinfo;
+        thingo.sin6_scope_id = ipv6->sin6_scope_id;
+        thingo.IP = inet_ntop(AF_INET6, &ipv6->sin6_addr, str, INET6_ADDRSTRLEN);
+    }
+    return thingo;
+}
+
+typedef INT(*GetAddrInfoW_func)(PCWSTR pNodeName, PCWSTR pServiceName, const ADDRINFOW* pHints, PADDRINFOW* ppResult);
+GetAddrInfoW_func GetAddrInfoW_ptr = NULL;
+INT hooked_GetAddrInfoW(PCWSTR pNodeName, PCWSTR pServiceName, const ADDRINFOW* pHints, PADDRINFOW* ppResult) {
+    //LogParamsEntry("hooked_GetAddrInfoW()", {}, t_generic_log);
+    auto result = GetAddrInfoW_ptr(pNodeName, pServiceName, pHints, ppResult);
+    if (!ppResult ) return result; // skip if we have nothing to log??
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)-1, t_get_addr_info, "GetAddrInfoW()", &log, result);
+
+    event->get_addr_info.node_name = LPCWSTRToString(pNodeName);
+    event->get_addr_info.service_name = LPCWSTRToString(pServiceName);
+    // dont even bother logging the hints thing, seems so dumb and too much junk to display in details
+    event->get_addr_info.results = vector<_addrinfoW>();
+
+    
+    PADDRINFOW var = *ppResult;
+    while (var) {
+        _addrinfoW thingo = {
+            var->ai_flags,
+            var->ai_family,
+            var->ai_socktype,
+            var->ai_protocol,
+            LPCWSTRToString(var->ai_canonname),
+            0, 0, string("nil"), 0, 0
+        };
+        if (var->ai_addr) {
+            thingo.address = convert_addr_struct(var->ai_addr);
+            if (!thingo.name.empty() && thingo.name != "nil")
+                LogHost(thingo.address.IP, thingo.name);
+            else LogHost(thingo.address.IP, event->get_addr_info.node_name);
+        }
+        event->get_addr_info.results.push_back(thingo);
+        var = var->ai_next;
+    }
+
+    // log IO transaction
+    log->recv_log.log(1);
+    log->total_recv_log.log(1);
+
+    LogParamsEntry("GetAddrInfoW()", { param_entry{event->get_addr_info.node_name.c_str(),0},param_entry{event->get_addr_info.service_name.c_str(),0}, }, t_get_addr_info);
+    return result;
+}
+
+
+
+typedef INT(*GetAddrInfoExW_func)(PCWSTR pName, PCWSTR pServiceName, DWORD dwNameSpace, LPGUID lpNspId, const ADDRINFOEXW* hints, PADDRINFOEXW* ppResult, timeval* timeout, LPOVERLAPPED lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, LPHANDLE lpHandle);
+GetAddrInfoExW_func GetAddrInfoExW_ptr = NULL;
+INT hooked_GetAddrInfoExW(PCWSTR pName, PCWSTR pServiceName, DWORD dwNameSpace, LPGUID lpNspId, const ADDRINFOEXW* hints, PADDRINFOEXW* ppResult, timeval* timeout, LPOVERLAPPED lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, LPHANDLE lpHandle) {
+    LogParamsEntry("hooked_GetAddrInfoExW()", {}, t_generic_log); 
+    auto result = GetAddrInfoExW_ptr(pName, pServiceName, dwNameSpace, lpNspId, hints, ppResult, timeout, lpOverlapped, lpCompletionRoutine, lpHandle);
+    if (!ppResult) return result; // skip if we have nothing to log??
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)-1, t_get_addr_info_ex, "GetAddrInfoExW()", &log, result);
+
+    event->get_addr_info_ex.node_name = LPCWSTRToString(pName);
+    event->get_addr_info_ex.service_name = LPCWSTRToString(pServiceName);
+    // dont even bother logging the hints thing, seems so dumb and too much junk to display in details
+    event->get_addr_info_ex.results = vector<_addrinfoEXW>();
+    GUID ZeroGuid = {};
+    event->get_addr_info_ex.lpNspId = lpNspId ? *lpNspId : ZeroGuid;
+    event->get_addr_info_ex.dwNameSpace = dwNameSpace;
+    event->get_addr_info_ex.lpHandle = lpHandle ? *lpHandle : 0;
+
+    PADDRINFOEXW var = *ppResult;
+    while (var) {
+        _addrinfoEXW thingo = {
+            var->ai_flags,
+            var->ai_family,
+            var->ai_socktype,
+            var->ai_protocol,
+            LPCWSTRToString(var->ai_canonname),
+            vector<char>((char*)var->ai_blob, (char*)var->ai_blob + var->ai_bloblen),
+            var->ai_provider ? *var->ai_provider : ZeroGuid,
+            0, 0, string("nil"), 0, 0
+        };
+        if (var->ai_addr) {
+            thingo.address = convert_addr_struct(var->ai_addr);
+            if (!thingo.name.empty() && thingo.name != "nil")
+                LogHost(thingo.address.IP, thingo.name);
+            else LogHost(thingo.address.IP, event->get_addr_info_ex.node_name);
+        }
+        event->get_addr_info_ex.results.push_back(thingo);
+        var = var->ai_next;
+    }
+
+    // log IO transaction
+    log->recv_log.log(1);
+    log->total_recv_log.log(1);
+
+    LogParamsEntry("GetAddrInfoExW()", { param_entry{event->get_addr_info_ex.node_name.c_str(),0},param_entry{event->get_addr_info_ex.service_name.c_str(),0}, }, t_get_addr_info_ex);
+    return result;
+}
+
+typedef INT(*WSALookupServiceBeginW_func)(LPWSAQUERYSETW lpqsRestrictions, DWORD dwControlFlags, LPHANDLE lphLookup);
+WSALookupServiceBeginW_func WSALookupServiceBeginW_ptr = NULL;
+INT hooked_WSALookupServiceBeginW(LPWSAQUERYSETW lpqsRestrictions, DWORD dwControlFlags, LPHANDLE lphLookup) {
+    //LogParamsEntry("hooked_WSALookupServiceBeginW()", {}, t_generic_log);
+    auto result = WSALookupServiceBeginW_ptr(lpqsRestrictions, dwControlFlags, lphLookup);
+    if (!lpqsRestrictions) return result; // nothing to log1!!
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)-1, t_wsa_lookup_service_begin, "WSALookupServiceBeginW()", &log, result);
+
+    GUID ZeroGuid = {};
+    WSAVERSION ZeroVersion = {};
+    event->wsa_lookup_service_begin.dwControlFlags = dwControlFlags;
+    event->wsa_lookup_service_begin.lphLookup = *lphLookup;
+    event->wsa_lookup_service_begin.lpqsRestrictions = {
+        lpqsRestrictions->dwSize,
+        LPCWSTRToString(lpqsRestrictions->lpszServiceInstanceName),
+        lpqsRestrictions->lpServiceClassId ? *lpqsRestrictions->lpServiceClassId : ZeroGuid,
+        lpqsRestrictions->lpVersion ? *lpqsRestrictions->lpVersion : ZeroVersion,
+        LPCWSTRToString(lpqsRestrictions->lpszComment),
+        lpqsRestrictions->dwNameSpace,
+        lpqsRestrictions->lpNSProviderId ? *lpqsRestrictions->lpNSProviderId : ZeroGuid,
+        LPCWSTRToString(lpqsRestrictions->lpszContext),
+        vector<AFPROTOCOLS>(lpqsRestrictions->lpafpProtocols, lpqsRestrictions->lpafpProtocols + lpqsRestrictions->dwNumberOfProtocols),
+        LPCWSTRToString(lpqsRestrictions->lpszQueryString),
+        vector<__ADDR_INFO>{},
+        lpqsRestrictions->dwOutputFlags,
+        vector<char>{},
+    };
+    if (lpqsRestrictions->lpcsaBuffer) {
+        for (int i = 0; i < lpqsRestrictions->dwNumberOfCsAddrs; i++) {
+            auto var = lpqsRestrictions->lpcsaBuffer[i];
+            event->wsa_lookup_service_begin.lpqsRestrictions.csaBuffer.push_back({
+                convert_addr_struct(var.LocalAddr.lpSockaddr),
+                convert_addr_struct(var.RemoteAddr.lpSockaddr),
+                var.iSocketType,
+                var.iProtocol
+    });}}
+    if (lpqsRestrictions->lpBlob) {
+        event->wsa_lookup_service_begin.lpqsRestrictions.lpBlob = vector<char>(lpqsRestrictions->lpBlob->pBlobData, lpqsRestrictions->lpBlob->pBlobData + lpqsRestrictions->lpBlob->cbSize);
+    }
+
+    // log IO transaction
+    log->recv_log.log(1);
+    log->total_recv_log.log(1);
+
+    LogParamsEntry("WSALookupServiceBeginW()", {}, t_wsa_lookup_service_begin);
+    return result;
+}
+
+typedef INT(*WSALookupServiceNextW_func)(HANDLE hLookup, DWORD dwControlFlags, LPDWORD lpdwBufferLength, LPWSAQUERYSETW lpqsResults);
+WSALookupServiceNextW_func WSALookupServiceNextW_ptr = NULL;
+INT hooked_WSALookupServiceNextW(HANDLE hLookup, DWORD dwControlFlags, LPDWORD lpdwBufferLength, LPWSAQUERYSETW lpqsResults) {
+    //LogParamsEntry("hooked_WSALookupServiceNextW()", {}, t_generic_log);
+    auto result = WSALookupServiceNextW_ptr(hLookup, dwControlFlags, lpdwBufferLength, lpqsResults);
+    if (!lpqsResults) return result; // nothing to log1!!
+
+    SocketLogs* log;
+    auto event = LogSocketEvent((SOCKET)-1, t_wsa_lookup_service_next, "WSALookupServiceNextW()", &log, result);
+
+    GUID ZeroGuid = {};
+    WSAVERSION ZeroVersion = {};
+    event->wsa_lookup_service_next.dwControlFlags = dwControlFlags;
+    event->wsa_lookup_service_next.hLookup = hLookup;
+    event->wsa_lookup_service_next.lpdwBufferLength = *lpdwBufferLength;
+    event->wsa_lookup_service_next.lpqsResults = {
+        lpqsResults->dwSize,
+        LPCWSTRToString(lpqsResults->lpszServiceInstanceName),
+        lpqsResults->lpServiceClassId ? *lpqsResults->lpServiceClassId : ZeroGuid,
+        lpqsResults->lpVersion? *lpqsResults->lpVersion : ZeroVersion,
+        LPCWSTRToString(lpqsResults->lpszComment),
+        lpqsResults->dwNameSpace,
+        lpqsResults->lpNSProviderId? *lpqsResults->lpNSProviderId : ZeroGuid,
+        LPCWSTRToString(lpqsResults->lpszContext),
+        vector<AFPROTOCOLS>(lpqsResults->lpafpProtocols, lpqsResults->lpafpProtocols + lpqsResults->dwNumberOfProtocols),
+        LPCWSTRToString(lpqsResults->lpszQueryString),
+        vector<__ADDR_INFO>{},
+        lpqsResults->dwOutputFlags,
+        vector<char>{},
+    };
+    if (lpqsResults->lpcsaBuffer) {
+        for (int i = 0; i < lpqsResults->dwNumberOfCsAddrs; i++) {
+            auto var = lpqsResults->lpcsaBuffer[i];
+            event->wsa_lookup_service_next.lpqsResults.csaBuffer.push_back({
+                convert_addr_struct(var.LocalAddr.lpSockaddr),
+                convert_addr_struct(var.RemoteAddr.lpSockaddr),
+                var.iSocketType,
+                var.iProtocol
+            });
+            if (!event->wsa_lookup_service_next.lpqsResults.lpszServiceInstanceName.empty() && event->wsa_lookup_service_next.lpqsResults.lpszServiceInstanceName != "nil")
+                LogHost(event->wsa_lookup_service_next.lpqsResults.csaBuffer[i].RemoteAddr.IP, event->wsa_lookup_service_next.lpqsResults.lpszServiceInstanceName);
+            else LogHost(event->wsa_lookup_service_next.lpqsResults.csaBuffer[i].RemoteAddr.IP, event->wsa_lookup_service_next.lpqsResults.lpszQueryString);
+        }
+    }
+    if (lpqsResults->lpBlob) {
+        event->wsa_lookup_service_next.lpqsResults.lpBlob = vector<char>(lpqsResults->lpBlob->pBlobData, lpqsResults->lpBlob->pBlobData + lpqsResults->lpBlob->cbSize);
+    }
+
+    // log IO transaction
+    log->recv_log.log(1);
+    log->total_recv_log.log(1);
+
+    LogParamsEntry("WSALookupServiceNextW()", {}, t_wsa_lookup_service_next);
+    return result;
+}
+
+typedef int(*connect_func)(SOCKET s, const sockaddr* name, int namelen);
+connect_func connect_ptr = NULL;
+int hooked_connect(SOCKET s, const sockaddr* name, int namelen) {
+    LogParamsEntry("hooked_connect()", {}, t_generic_log);
+    auto result = connect_ptr(s, name, namelen);
+    if (!name) return result; // nothing to log1!!
+
+    SocketLogs* log;
+    auto event = LogSocketEvent(s, t_connect, "connect()", &log, result);
+
+    event->connect.namelen = namelen;
+    event->connect.address = convert_addr_struct((sockaddr*)name); // what the hell
+
+    // and now we can apply a name to our socket
+    string socket_source_name = CheckHost(event->connect.address.IP);
+    if (!socket_source_name.empty()) {
+        size_t len = socket_source_name.size();
+        if (len < sizeof(log->custom_label)) {
+            memcpy(log->custom_label, socket_source_name.c_str(), len + 1); // include null terminator
+        }
+        else {
+            // Truncate safely and null-terminate
+            memcpy(log->custom_label, socket_source_name.c_str(), sizeof(log->custom_label) - 1);
+            log->custom_label[sizeof(log->custom_label) - 1] = '\0';
+        }
+    }
+
+    // do not log IO transaction
+    LogParamsEntry("connect()", { param_entry{event->connect.address.IP.c_str(),0},param_entry{log->custom_label,0},}, t_connect);
+    return result;
+}
 
 bool LoadHooks() {
     if (MH_Initialize() != MH_OK) return false;
@@ -629,6 +893,24 @@ bool LoadHooks() {
     if (!HookMacro(&WinHttpQueryHeaders, &hooked_win_http_query_headers, &win_http_query_headers_ptr)) return false;
     LogEntry("http query headers hooked", t_generic_log);
 
+    // url stuff
+    if (!HookMacro(&gethostbyname, &hooked_gethostbyname, &gethostbyname_ptr)) return false;
+    LogEntry("gethostbyname hooked", t_generic_log);
+
+    if (!HookMacro(&GetAddrInfoW, &hooked_GetAddrInfoW, &GetAddrInfoW_ptr)) return false; 
+    LogEntry("GetAddrInfoW hooked", t_generic_log);
+
+    if (!HookMacro(&GetAddrInfoExW, &hooked_GetAddrInfoExW, &GetAddrInfoExW_ptr)) return false;
+    LogEntry("GetAddrInfoExW hooked", t_generic_log);
+
+    if (!HookMacro(&WSALookupServiceBeginW, &hooked_WSALookupServiceBeginW, &WSALookupServiceBeginW_ptr)) return false;
+    LogEntry("WSALookupServiceBeginW hooked", t_generic_log);
+
+    if (!HookMacro(&WSALookupServiceNextW, &hooked_WSALookupServiceNextW, &WSALookupServiceNextW_ptr)) return false;
+    LogEntry("WSALookupServiceNextW hooked", t_generic_log);
+
+    if (!HookMacro(&connect, &hooked_connect, &connect_ptr)) return false;
+    LogEntry("connect hooked", t_generic_log);
 
     return true;
 }

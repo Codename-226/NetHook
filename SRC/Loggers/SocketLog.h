@@ -80,7 +80,8 @@ enum socket_event_category {
 	c_send, 
 	c_recieve, 
 	c_info,
-	c_http
+	c_http,
+	c_url,
 };
 
 enum socket_state {
@@ -210,6 +211,100 @@ public:
 	int index_in;
 	int index_out;
 };
+class socentry_get_host_by_name {
+public:
+	string in_name;
+	string name;
+	vector<string> aliases;
+	short addrtype;
+	short length;
+	vector<string> addr_list;
+};
+struct __addr {
+	short   sin_family;
+	u_short sin_port;
+	string  IP;
+	u_long  sin6_flowinfo;
+	u_long  sin6_scope_id;
+};
+struct _addrinfoW {
+public:
+	int ai_flags;
+	int ai_family;
+	int ai_socktype;
+	int ai_protocol;
+	string name;
+	__addr address;
+};
+class socentry_get_addr_info {
+public:
+	string node_name;
+	string service_name;
+	vector<_addrinfoW> results;    
+};
+class _addrinfoEXW {
+public:
+	int ai_flags;
+	int ai_family;
+	int ai_socktype;
+	int ai_protocol;
+	string name;
+	vector<char> ai_blob;
+	GUID ai_provider;
+	__addr address;
+};
+class socentry_get_addr_info_ex {
+public:
+	string node_name;
+	string service_name;
+	vector<_addrinfoEXW> results;
+	DWORD dwNameSpace;
+	GUID lpNspId;
+	HANDLE lpHandle;
+};
+
+typedef struct __ADDR_INFO {
+	__addr LocalAddr;
+	__addr RemoteAddr;
+	INT            iSocketType;
+	INT            iProtocol;
+};
+typedef struct __WSAQuerySetW {
+	DWORD dwSize;
+	string lpszServiceInstanceName;
+	GUID lpServiceClassId;
+	WSAVERSION lpVersion;
+	string lpszComment;
+	DWORD dwNameSpace;
+	GUID lpNSProviderId;
+	string lpszContext;
+	vector<AFPROTOCOLS> afpProtocols;
+	string lpszQueryString;
+	vector<__ADDR_INFO> csaBuffer;
+	DWORD dwOutputFlags;
+	vector<char> lpBlob;
+};
+class socentry_wsa_lookup_service_begin {
+public:
+	__WSAQuerySetW lpqsRestrictions;
+	DWORD dwControlFlags;
+	HANDLE lphLookup;
+};
+class socentry_wsa_lookup_service_next {
+public:
+	HANDLE hLookup;
+	DWORD dwControlFlags;
+	DWORD lpdwBufferLength;
+	__WSAQuerySetW lpqsResults;
+};
+class socentry_connect {
+public:
+	__addr address;
+	int namelen;
+};
+
+
+
 //class httpentry_create_url {
 //public:
 //	int struct_size;
@@ -268,8 +363,14 @@ void http_request_connection_paired(HINTERNET request, HINTERNET connection) {
 }
 
 
-
-
+// IP address logged stuff
+map<string, string> mapped_hosts = {};
+void LogHost(string IP, string host) {
+	mapped_hosts[IP] = host;
+}
+string CheckHost(string IP) {
+	return mapped_hosts[IP];
+}
 
 
 class socket_log_entry_data {
@@ -296,6 +397,14 @@ public:
 		httpentry_read_data http_read_data;
 		httpentry_query_headers http_query_headers;
 		//httpentry_create_url http_create_url;
+
+		socentry_get_host_by_name get_hostbyname;
+		socentry_get_addr_info get_addr_info;
+		socentry_get_addr_info_ex get_addr_info_ex;
+		socentry_wsa_lookup_service_begin wsa_lookup_service_begin;
+		socentry_wsa_lookup_service_next wsa_lookup_service_next;
+
+		socentry_connect connect;
 	};
 };
 
@@ -400,7 +509,7 @@ public:
 };
 
 
-enum SourceType { st_Socket, st_WinHttp };
+enum SourceType { st_Socket, st_WinHttp, st_URL };
 const int socket_custom_label_len = 256;
 class SocketLogs {
 public:
@@ -458,6 +567,8 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 		log_container->timestamp = nanoseconds(); 
 		log_container->s = s;
 		logged_sockets[s] = log_container;
+		// if we created a socket log with the id of -1, then give it a custom label because this is log for special non-socket related events (global events!!!)
+		if ((int)s == -1) memcpy(log_container->custom_label, "[GLOBAL EVENTS]", 14);
 	}
 
 	// create log event stuff
@@ -495,6 +606,16 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 	case t_http_query_headers:
 	//case t_http_create_url:
 		new_socket_event->category = c_http;
+		break;
+	case t_get_hostname:
+	case t_get_addr_info:
+	case t_get_addr_info_ex:
+	case t_wsa_lookup_service_begin:
+	case t_wsa_lookup_service_next:
+		new_socket_event->category = c_url;
+		break;
+	case t_connect:
+		new_socket_event->category = c_create;
 		break;
 	}
 	// append

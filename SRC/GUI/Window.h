@@ -71,6 +71,7 @@ static bool filter_by_status_closed = false;
 static bool filter_by_hidden = true;
 static bool filter_by_is_socket = false;
 static bool filter_by_is_http = false;
+static bool filter_by_is_url = false;
 static bool filter_by_has_custom_name = false;
 
 
@@ -261,6 +262,7 @@ int injected_window_main(){
     bool show_demo_window = false;
     bool show_plot_demo_window = false;
     bool show_console_window = false;
+    bool show_hostnames_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -315,6 +317,7 @@ int injected_window_main(){
                         DumpToNotepad(string(logs.buffer));
                     ImGui::EndMenu();
                 }
+                ImGui::MenuItem("Hostnames", nullptr, &show_hostnames_window);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Edit")) {
@@ -337,6 +340,13 @@ int injected_window_main(){
                     displayLogFilter("Exclude HTTP Write Data", t_http_write_data);
                     displayLogFilter("Exclude HTTP Read Data", t_http_read_data);
                     displayLogFilter("Exclude HTTP Query Headers", t_http_query_headers);
+                    displayLogFilter("Exclude GetHostByName", t_get_hostname);
+                    displayLogFilter("Exclude GetAddrInfo", t_get_addr_info);
+                    displayLogFilter("Exclude GetAddrInfoEx", t_get_addr_info_ex);
+                    displayLogFilter("Exclude LookupServiceBegin", t_wsa_lookup_service_begin);
+                    displayLogFilter("Exclude LookupServiceNext", t_wsa_lookup_service_next);
+                    displayLogFilter("Exclude Connect", t_connect);
+
                     displayLogFilter("Exclude Error Log", t_error_log);
                     displayLogFilter("Exclude Generic Log", t_generic_log);
                     displayLogFilter("Exclude Uncategorized Log", t_uncategorized);
@@ -348,12 +358,14 @@ int injected_window_main(){
                         filter_by_has_custom_name = true;
                         filter_by_is_socket = true;
                         filter_by_is_http = false;
+                        filter_by_is_url = true;
                     }
                     if (ImGui::MenuItem("Apply SOCKET config", nullptr, nullptr)) {
                         focus_http = false;
                         filter_by_has_custom_name = false;
                         filter_by_is_socket = false;
                         filter_by_is_http = true;
+                        filter_by_is_url false;
                     }
                     ImGui::Separator();
                     if (ImGui::MenuItem("Save Configs"))
@@ -391,6 +403,17 @@ int injected_window_main(){
             if (ImGui::Begin("Console Output", &show_console_window, ImGuiWindowFlags_HorizontalScrollbar)) {
                 ImGui::TextUnformatted(logs.buffer);
                 
+            }
+            ImGui::End();
+        }
+        if (show_hostnames_window) {
+            if (ImGui::Begin("Hostnames Output", &show_hostnames_window, ImGuiWindowFlags_HorizontalScrollbar)) {
+                std::string output;
+                for (const auto& [ip, host] : mapped_hosts)
+                    output += ip + " -> " + host + "\n";
+                if (ImGui::Button("Export"))
+                    DumpToNotepad(output);
+                ImGui::TextUnformatted(output.c_str());
             }
             ImGui::End();
         }
@@ -600,6 +623,7 @@ int injected_window_main(){
                 ImGui::MenuItem("exclude: un-named", "", &filter_by_has_custom_name);
                 ImGui::MenuItem("exclude: socket", "", &filter_by_is_socket);
                 ImGui::MenuItem("exclude: http", "", &filter_by_is_http);
+                ImGui::MenuItem("exclude: url", "", &filter_by_is_url);
 
                 ImGui::Separator();
                 if (ImGui::MenuItem("sort: creation timestamp", "", socket_sort_type == sort_by_timestamp)) socket_sort_type = sort_by_timestamp;
@@ -627,13 +651,16 @@ int injected_window_main(){
             int total_shown_sockets = 0;
             int total_http = 0;
             int total_shown_http = 0;
+            int total_other = 0;
 
             // filter out bad sockets
             vector<SocketLogs*> filtered_sockets = {};
             for (const auto& pair : logged_sockets) {
                 if (pair.second->source_type == st_Socket)
-                     total_sockets++;
-                else total_http++;
+                    total_sockets++;
+                else if (pair.second->source_type == st_WinHttp)
+                    total_http++;
+                else total_other++;
 
                 // we need to refresh cache to revalidate all values
                 pair.second->total_send_log.refresh_cache(timestamp);
@@ -657,11 +684,12 @@ int injected_window_main(){
 
                 if (filter_by_is_socket && pair.second->source_type == st_Socket)  continue;
                 if (filter_by_is_http && pair.second->source_type == st_WinHttp)   continue;
+                if (filter_by_is_url && pair.second->source_type == st_URL)        continue;
 
                 filtered_sockets.push_back(pair.second);
                 if (pair.second->source_type == st_Socket)
                      total_shown_sockets++;
-                else total_shown_http++;
+                else if (pair.second->source_type == st_WinHttp) total_shown_http++;
             }
             // then sort sockets
             switch (socket_sort_type) {
@@ -683,7 +711,7 @@ int injected_window_main(){
             }
 
             ImGui::SameLine();
-            ImGui::Text("Sockets: %d/%d HTTP: %d/%d", total_shown_sockets, total_sockets, total_shown_http, total_http);
+            ImGui::Text("Sockets: %d/%d HTTP: %d/%d", total_shown_sockets, total_sockets - total_other, total_shown_http, total_http);
             ImGui::SameLine();
             ImGui::Text("Packets sent: %d, recieved: %d", global_io_send_log.total_logs, global_io_recv_log.total_logs);
 
@@ -723,7 +751,8 @@ int injected_window_main(){
                         if (preview_socket_label && soc_logs->custom_label[0])
                             memcpy(label, soc_logs->custom_label, 256);
                         else if (soc_logs->source_type == st_Socket) sprintf_s(label, "Socket %lld", current_socket);
-                        else  sprintf_s(label, "HTTP %lld", current_socket);
+                        else if (soc_logs->source_type == st_WinHttp) sprintf_s(label, "HTTP %lld", current_socket);
+                        else sprintf_s(label, "add source here? %lld", current_socket);
                         ImGui::Text(label);
 
                         if (preview_socket_status) {
@@ -890,6 +919,7 @@ int injected_window_main(){
                                     else if (curr_loggy->category == c_recieve) ImGui::Text("receive ");
                                     else if (curr_loggy->category == c_info) ImGui::Text("info    ");
                                     else if (curr_loggy->category == c_http) ImGui::Text("http    ");
+                                    else if (curr_loggy->category == c_url)  ImGui::Text("url     ");
                                     ImGui::SameLine();
                                     switch (curr_loggy->type) {
                                     case t_send:                     ImGui::Text("(Send)              "); break;
@@ -910,6 +940,12 @@ int injected_window_main(){
                                     case t_http_write_data:          ImGui::Text("(HTTPWriteData)     "); break;
                                     case t_http_read_data:           ImGui::Text("(HTTPReadData)      "); break;
                                     case t_http_query_headers:       ImGui::Text("(HTTPQueryHeaders)  "); break;
+                                    case t_get_hostname:             ImGui::Text("(GetHostByName)     "); break;
+                                    case t_get_addr_info:            ImGui::Text("(GetAddrInfo)       "); break;
+                                    case t_get_addr_info_ex:         ImGui::Text("(GetAddrInfoEx)     "); break;
+                                    case t_wsa_lookup_service_begin: ImGui::Text("(LookupServiceBegin)"); break;
+                                    case t_wsa_lookup_service_next:  ImGui::Text("(LookupServiceNext) "); break;
+                                    case t_connect:                  ImGui::Text("(Connect)           "); break;
                                     }
                                     ImGui::SameLine();
                                     if (curr_loggy->error_code)
@@ -960,6 +996,12 @@ int injected_window_main(){
                                     case t_http_write_data:          ImGui::Text("(HTTPWriteData)");      break;
                                     case t_http_read_data:           ImGui::Text("(HTTPReadData)");       break;
                                     case t_http_query_headers:       ImGui::Text("(HTTPQueryHeaders)");   break;
+                                    case t_get_hostname:             ImGui::Text("(GetHostByName)");      break;
+                                    case t_get_addr_info:            ImGui::Text("(GetAddrInfo)");        break;
+                                    case t_get_addr_info_ex:         ImGui::Text("(GetAddrInfoEx)");      break;
+                                    case t_wsa_lookup_service_begin: ImGui::Text("(LookupServiceBegin)"); break;
+                                    case t_wsa_lookup_service_next:  ImGui::Text("(LookupServiceNext)");  break;
+                                    case t_connect:                  ImGui::Text("(Connect)");            break;
                                     }
                                     ImGui::Text("Status: %s", ErrorCodeToString(curr_loggy->error_code).c_str());
                                     ImGui::NewLine();
@@ -1108,6 +1150,129 @@ int injected_window_main(){
                                         ImGui::Text("index in: 0x%x", curr_loggy->data.http_query_headers.index_in);
                                         ImGui::Text("index out: 0x%x", curr_loggy->data.http_query_headers.index_out);
                                         break;}
+                                    case t_get_hostname: {
+                                        ImGui::Text("input name: %s", curr_loggy->data.get_hostbyname.in_name.c_str());
+                                        ImGui::Text("name: %s", curr_loggy->data.get_hostbyname.name.c_str());
+                                        ImGui::Text("address type: 0x%x", curr_loggy->data.get_hostbyname.addrtype);
+                                        ImGui::Text("length: 0x%x", curr_loggy->data.get_hostbyname.length);
+                                        ImGui::Text("aliases: ");
+                                        for (int i = 0; i < curr_loggy->data.get_hostbyname.aliases.size(); i++)
+                                            ImGui::Text("%d: %s", i, curr_loggy->data.get_hostbyname.aliases[i].c_str());
+                                        ImGui::Text("addresses: ");
+                                        for (int i = 0; i < curr_loggy->data.get_hostbyname.addr_list.size(); i++)
+                                            ImGui::Text("%d: %s##2", i, curr_loggy->data.get_hostbyname.addr_list[i].c_str());
+                                        break;}
+                                    case t_get_addr_info: {
+                                        ImGui::Text("node name: %s", curr_loggy->data.get_addr_info.node_name.c_str());
+                                        ImGui::Text("service name: %s", curr_loggy->data.get_addr_info.service_name.c_str());
+                                        ImGui::Text("results: ");
+                                        for (int i = 0; i < curr_loggy->data.get_addr_info.results.size(); i++) {
+                                            ImGui::PushID(i);
+                                            ImGui::Text("%d - flags: 0x%x", i, curr_loggy->data.get_addr_info.results[i].ai_flags);
+                                            ImGui::Text("%d - family: 0x%x", i, curr_loggy->data.get_addr_info.results[i].ai_family);
+                                            ImGui::Text("%d - socket type: 0x%x", i, curr_loggy->data.get_addr_info.results[i].ai_socktype);
+                                            ImGui::Text("%d - protocol: 0x%x", i, curr_loggy->data.get_addr_info.results[i].ai_protocol);
+                                            ImGui::Text("%d - name: %s", i, curr_loggy->data.get_addr_info.results[i].name);
+                                            ImGui::Text("%d - port: 0x%x", i, curr_loggy->data.get_addr_info.results[i].address.sin_port);
+                                            ImGui::Text("%d - address: %s", i, curr_loggy->data.get_addr_info.results[i].address.IP.c_str());
+                                            ImGui::PopID();
+                                        }
+                                        break;}
+                                    case t_get_addr_info_ex: {
+                                        ImGui::Text("node name: %s", curr_loggy->data.get_addr_info_ex.node_name.c_str());
+                                        ImGui::Text("service name: %s", curr_loggy->data.get_addr_info_ex.service_name.c_str());
+                                        ImGui::Text("namespace: 0x%x", curr_loggy->data.get_addr_info_ex.dwNameSpace);
+                                        // dont bother showing guid
+                                        ImGui::Text("handle: 0x%x", curr_loggy->data.get_addr_info_ex.lpHandle);
+                                        ImGui::Text("results: ");
+                                        for (int i = 0; i < curr_loggy->data.get_addr_info_ex.results.size(); i++) {
+                                            ImGui::PushID(i);
+                                            ImGui::Text("%d - flags: 0x%x", i, curr_loggy->data.get_addr_info_ex.results[i].ai_flags);
+                                            ImGui::Text("%d - family: 0x%x", i, curr_loggy->data.get_addr_info_ex.results[i].ai_family);
+                                            ImGui::Text("%d - socket type: 0x%x", i, curr_loggy->data.get_addr_info_ex.results[i].ai_socktype);
+                                            ImGui::Text("%d - protocol: 0x%x", i, curr_loggy->data.get_addr_info_ex.results[i].ai_protocol);
+                                            ImGui::Text("%d - name: %s", i, curr_loggy->data.get_addr_info_ex.results[i].name.c_str());
+                                            ImGui::Text("%d - port: 0x%x", i, curr_loggy->data.get_addr_info_ex.results[i].address.sin_port);
+                                            ImGui::Text("%d - address: %s", i, curr_loggy->data.get_addr_info_ex.results[i].address.IP.c_str());
+                                            ImGui::Text("%d - blob: 0x%llx [%s]", i, curr_loggy->data.get_addr_info_ex.results[i].ai_blob.size(), BufferShortPreview(curr_loggy->data.get_addr_info_ex.results[i].ai_blob).c_str());
+                                            ImGui::PopID();
+                                        }
+                                        break;}
+                                    case t_wsa_lookup_service_begin: {
+                                        ImGui::Text("handle: 0x%x", curr_loggy->data.wsa_lookup_service_begin.lphLookup);
+                                        ImGui::Text("control flags: 0x%x", curr_loggy->data.wsa_lookup_service_begin.dwControlFlags);
+                                        ImGui::Text("size: 0x%x", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.dwSize);
+                                        ImGui::Text("service instance name: %s", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpszServiceInstanceName.c_str());
+                                        // skip guid
+                                        ImGui::Text("version: 0x%x", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpVersion.dwVersion);
+                                        ImGui::Text("version comparator: 0x%x", (int)curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpVersion.ecHow);
+                                        ImGui::Text("comment: %s", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpszComment.c_str());
+                                        ImGui::Text("namespace: 0x%x", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.dwNameSpace);
+                                        // skip guid
+                                        ImGui::Text("context: %s", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpszContext.c_str());
+                                        ImGui::Text("query: %s", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpszQueryString.c_str());
+                                        ImGui::Text("output flags: 0x%x", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.dwOutputFlags);
+                                        ImGui::Text("blob: 0x%llx [%s]", curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpBlob.size(), BufferShortPreview(curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.lpBlob).c_str());
+                                        ImGui::Text("protocols: ");
+                                        for (int i = 0; i < curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.afpProtocols.size(); i++) {
+                                            ImGui::PushID(i);
+                                            ImGui::Text("%d - family: 0x%x", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.afpProtocols[i].iAddressFamily);
+                                            ImGui::Text("%d - protocol: 0x%x", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.afpProtocols[i].iProtocol);
+                                            ImGui::PopID();
+                                        }
+                                        ImGui::Text("addresses: ");
+                                        for (int i = 0; i < curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.csaBuffer.size(); i++) {
+                                            ImGui::PushID(i);
+                                            ImGui::Text("%d - local IP: %s", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.csaBuffer[i].LocalAddr.IP.c_str());
+                                            ImGui::Text("%d - local port: 0x%x", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.csaBuffer[i].LocalAddr.sin_port);
+                                            ImGui::Text("%d - remote IP: %s", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.csaBuffer[i].RemoteAddr.IP.c_str());
+                                            ImGui::Text("%d - remote port: 0x%x", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.csaBuffer[i].RemoteAddr.sin_port);
+                                            ImGui::Text("%d - socket type: 0x%x", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.csaBuffer[i].iSocketType);
+                                            ImGui::Text("%d - protocol: 0x%x", i, curr_loggy->data.wsa_lookup_service_begin.lpqsRestrictions.csaBuffer[i].iProtocol);
+                                            ImGui::PopID();
+                                        }
+                                        break;}
+                                    case t_wsa_lookup_service_next: {
+                                        ImGui::Text("handle: 0x%x", curr_loggy->data.wsa_lookup_service_next.hLookup);
+                                        ImGui::Text("control flags: 0x%x", curr_loggy->data.wsa_lookup_service_next.dwControlFlags);
+                                        ImGui::Text("buffer size: 0x%x", curr_loggy->data.wsa_lookup_service_next.lpdwBufferLength);
+                                        ImGui::Text("size: 0x%x", curr_loggy->data.wsa_lookup_service_next.lpqsResults.dwSize);
+                                        ImGui::Text("service instance name: %s", curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpszServiceInstanceName.c_str());
+                                        // skip guid
+                                        ImGui::Text("version: 0x%x", curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpVersion.dwVersion);
+                                        ImGui::Text("version comparator: 0x%x", (int)curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpVersion.ecHow);
+                                        ImGui::Text("comment: %s", curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpszComment.c_str());
+                                        ImGui::Text("namespace: 0x%x", curr_loggy->data.wsa_lookup_service_next.lpqsResults.dwNameSpace);
+                                        // skip guid
+                                        ImGui::Text("context: %s", curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpszContext.c_str());
+                                        ImGui::Text("query: %s", curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpszQueryString.c_str());
+                                        ImGui::Text("output flags: 0x%x", curr_loggy->data.wsa_lookup_service_next.lpqsResults.dwOutputFlags);
+                                        ImGui::Text("blob: 0x%llx [%s]", curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpBlob.size(), BufferShortPreview(curr_loggy->data.wsa_lookup_service_next.lpqsResults.lpBlob).c_str());
+                                        ImGui::Text("protocols: ");
+                                        for (int i = 0; i < curr_loggy->data.wsa_lookup_service_next.lpqsResults.afpProtocols.size(); i++) {
+                                            ImGui::PushID(i);
+                                            ImGui::Text("%d - family: 0x%x", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.afpProtocols[i].iAddressFamily);
+                                            ImGui::Text("%d - protocol: 0x%x", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.afpProtocols[i].iProtocol);
+                                            ImGui::PopID();
+                                        }
+                                        ImGui::Text("addresses: ");
+                                        for (int i = 0; i < curr_loggy->data.wsa_lookup_service_next.lpqsResults.csaBuffer.size(); i++) {
+                                            ImGui::PushID(i);
+                                            ImGui::Text("%d - local IP: %s", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.csaBuffer[i].LocalAddr.IP.c_str());
+                                            ImGui::Text("%d - local port: 0x%x", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.csaBuffer[i].LocalAddr.sin_port);
+                                            ImGui::Text("%d - remote IP: %s", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.csaBuffer[i].RemoteAddr.IP.c_str());
+                                            ImGui::Text("%d - remote port: 0x%x", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.csaBuffer[i].RemoteAddr.sin_port);
+                                            ImGui::Text("%d - socket type: 0x%x", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.csaBuffer[i].iSocketType);
+                                            ImGui::Text("%d - protocol: 0x%x", i, curr_loggy->data.wsa_lookup_service_next.lpqsResults.csaBuffer[i].iProtocol);
+                                            ImGui::PopID();
+                                        }
+                                        break;}
+                                    case t_connect: {
+                                        ImGui::Text("address: %s", curr_loggy->data.connect.address.IP.c_str());
+                                        ImGui::Text("port: 0x%x", curr_loggy->data.connect.address.sin_port);
+                                        ImGui::Text("length: 0x%x", curr_loggy->data.connect.namelen);
+                                        break;}
+
                                     }
 
                                     if (curr_loggy->callstack)
@@ -1140,7 +1305,7 @@ int injected_window_main(){
                                 display_iolog_details("recv from     |", &selected_socket->recvfrom_log);
                                 display_iolog_details("wsa recv      |", &selected_socket->wsarecv_log);
                                 display_iolog_details("wsa recv from |", &selected_socket->wsarecvfrom_log);
-                            } else { // http display for now
+                            } else if (selected_socket->source_type == st_WinHttp) {
                                 display_iolog_details("total sent         |", &selected_socket->total_send_log);
                                 display_iolog_details("total read         |", &selected_socket->total_recv_log);
                                 ImGui::NewLine();
@@ -1149,7 +1314,11 @@ int injected_window_main(){
                                 ImGui::NewLine();
                                 display_iolog_details("HTTP read          |", &selected_socket->recv_log);
                                 display_iolog_details("HTTP query headers |", &selected_socket->recvfrom_log);
-
+                            }
+                            else if (selected_socket->source_type == st_URL) {
+                                display_iolog_details("total operations |", &selected_socket->total_recv_log);
+                                ImGui::NewLine();
+                                display_iolog_details("operations       |", &selected_socket->recv_log);
                             }
                             ImGui::EndTabItem();
                         }
