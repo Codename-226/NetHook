@@ -89,7 +89,13 @@ enum socket_state {
 	s_open,
 	s_unknown,
 };
-
+struct __addr {
+	short   sin_family;
+	u_short sin_port;
+	string  IP;
+	u_long  sin6_flowinfo;
+	u_long  sin6_scope_id;
+};
 class socentry_send {
 public:
 	int flags;
@@ -99,7 +105,7 @@ class socentry_sendto {
 public:
 	int flags;
 	vector<char> buffer;
-	vector<char> to;
+	__addr address;
 };
 class socentry_wsasend {
 public:
@@ -114,7 +120,7 @@ public:
 	int bytes_sent;
 	void* completion_routine;
 	vector<vector<char>> buffer;
-	vector<char> to;
+	__addr address;
 };
 class socentry_wsasendmsg {
 public:
@@ -124,7 +130,7 @@ public:
 	void* completion_routine;
 	vector<vector<char>> buffer;
 	vector<char> control_buffer;
-	vector<char> to;
+	__addr address;
 };
 class socentry_recv {
 public:
@@ -135,7 +141,7 @@ class socentry_recvfrom {
 public:
 	int flags;
 	vector<char> buffer;
-	vector<char> from;
+	__addr address;
 };
 class socentry_wsarecv {
 public:
@@ -152,7 +158,7 @@ public:
 	int bytes_recived;
 	void* completion_routine;
 	vector<vector<char>> buffer;
-	vector<char> from;
+	__addr address;
 };
 
 
@@ -219,13 +225,6 @@ public:
 	short addrtype;
 	short length;
 	vector<string> addr_list;
-};
-struct __addr {
-	short   sin_family;
-	u_short sin_port;
-	string  IP;
-	u_long  sin6_flowinfo;
-	u_long  sin6_scope_id;
 };
 struct _addrinfoW {
 public:
@@ -364,7 +363,7 @@ void http_request_connection_paired(HINTERNET request, HINTERNET connection) {
 
 
 // IP address logged stuff
-map<string, string> mapped_hosts = {};
+map<string, string> mapped_hosts = { {"8.8.8.8", "google DNS"},  {"2001:4860:4860::8888", "google DNSv6"},  {"127.0.0.1", "localhost"} };
 void LogHost(string IP, string host) {
 	mapped_hosts[IP] = host;
 }
@@ -568,7 +567,10 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 		log_container->s = s;
 		logged_sockets[s] = log_container;
 		// if we created a socket log with the id of -1, then give it a custom label because this is log for special non-socket related events (global events!!!)
-		if ((int)s == -1) memcpy(log_container->custom_label, "[GLOBAL EVENTS]", 14);
+		if ((int)s == -1) {
+			memcpy(log_container->custom_label, "[GLOBAL EVENTS]", 16);
+			log_container->source_type = st_URL;
+		}
 	}
 
 	// create log event stuff

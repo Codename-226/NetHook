@@ -136,6 +136,51 @@ void ResumeProcess() {
 }
 
 
+void TryWriteSocketAddresses(bool resolve_address_to_hostname) {
+    int total_valid = 0;
+    int total_success = 0;
+    for (const auto& [sock, logs] : logged_sockets) {
+        if (logs && logs->source_type == st_Socket) {
+            total_valid++;
+            
+            sockaddr_storage addr; // Use sockaddr_storage for IPv4/IPv6 flexibility
+            int addr_len = sizeof(addr);
+
+            if (!getpeername(sock, (sockaddr*)(&addr), &addr_len)) {
+
+                auto var = convert_addr_struct((sockaddr*)(&addr)).IP;
+                if (!resolve_address_to_hostname) {
+                dont_resolve:
+                    // screw it, we can make a function for this some other time.
+                    int name_len = var.size();
+                    if (name_len > sizeof(logs->custom_label)) name_len = sizeof(logs->custom_label) - 1;
+                    memcpy(logs->custom_label, var.c_str(), name_len);
+                    logs->custom_label[name_len] = '\0';
+                    total_success++;
+                } else {
+                    if (try_name_log_from_address(var, logs)) {
+                        LogParamsEntry("resolved socket IP and found cached hostname", { { var.c_str(),0} }, t_generic_log);
+                        total_success++;
+                    } else { // we try to get hostname
+                        char hostname[NI_MAXHOST] = {};
+                        char servname[NI_MAXSERV] = {};
+                        if (!getnameinfo((sockaddr*)(&addr), addr_len, hostname, sizeof(hostname), servname, sizeof(servname), NI_NUMERICSERV)) {
+                            LogParamsEntry("resolved socket hostname", { { hostname,0}, {servname,0} }, t_generic_log);
+                            int name_len = strlen(hostname);
+                            if (name_len > sizeof(logs->custom_label)) name_len = sizeof(logs->custom_label) - 1;
+
+                            memcpy(logs->custom_label, hostname, name_len);
+                            logs->custom_label[name_len] = '\0';
+                            total_success++;
+                        } else goto dont_resolve;
+                    }
+                }
+            }
+        }
+    }
+    LogParamsEntry("socket names have been set to their addresses", { { "total sockets", (uint64_t)total_valid}, {"succeeded", (uint64_t)total_success}}, t_generic_log);
+}
+
 bool CopyToClipboard(const std::string& text) {
     if (!OpenClipboard(nullptr)) {
         LogEntry("Failed to open clipboard", t_error_log);

@@ -65,6 +65,7 @@ static bool focused_show_wsarecvfrom = false;
 
 static bool filter_by_has_recieve = false;
 static bool filter_by_has_send = false;
+static bool filter_by_has_lifetime_activity = false;
 static bool filter_by_status_open = false;
 static bool filter_by_status_unknown = false;
 static bool filter_by_status_closed = false;
@@ -365,7 +366,7 @@ int injected_window_main(){
                         filter_by_has_custom_name = false;
                         filter_by_is_socket = false;
                         filter_by_is_http = true;
-                        filter_by_is_url false;
+                        filter_by_is_url = false;
                     }
                     ImGui::Separator();
                     if (ImGui::MenuItem("Save Configs"))
@@ -390,6 +391,10 @@ int injected_window_main(){
                     FreezeProcess();
                 if (is_process_suspended && ImGui::MenuItem("Resume Process", nullptr, nullptr))
                     ResumeProcess();
+                if (ImGui::MenuItem("Try map all socket addresses", nullptr, nullptr))
+                    TryWriteSocketAddresses(false);
+                if (ImGui::MenuItem("Try map all socket hostnames", nullptr, nullptr))
+                    TryWriteSocketAddresses(true);
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
@@ -616,6 +621,7 @@ int injected_window_main(){
             if (ImGui::BeginPopup("display_popup")) {
                 ImGui::MenuItem("require: recv activity", "", &filter_by_has_recieve);
                 ImGui::MenuItem("require: send activity", "", &filter_by_has_send);
+                ImGui::MenuItem("require: lifetime activity", "", &filter_by_has_lifetime_activity);
                 ImGui::MenuItem("exclude: status open", "", &filter_by_status_open);
                 ImGui::MenuItem("exclude: status unknown", "", &filter_by_status_unknown);
                 ImGui::MenuItem("exclude: status closed", "", &filter_by_status_closed);
@@ -673,6 +679,10 @@ int injected_window_main(){
                 }else {
                     if (filter_by_has_recieve && pair.second->total_recv_log.cached_total <= 0.0f) continue;
                     if (filter_by_has_send && pair.second->total_send_log.cached_total <= 0.0f) continue;
+                }
+                if (filter_by_has_lifetime_activity) {
+                    if (pair.second->total_recv_log.total <= 0.0f
+                    &&  pair.second->total_send_log.total <= 0.0f) continue;
                 }
 
                 if (filter_by_status_open && pair.second->state == s_open)    continue;
@@ -1018,8 +1028,8 @@ int injected_window_main(){
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.sendto.flags);
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.sendto.buffer.size(), BufferShortPreview(curr_loggy->data.sendto.buffer).c_str());
                                         if (ImGui::Button("Copy#1")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.sendto.buffer, 0)); }
-                                        ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.sendto.to.size(), BufferShortPreview(curr_loggy->data.sendto.to).c_str());
-                                        if (ImGui::Button("Copy#2")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.sendto.to, 0)); }
+                                        ImGui::Text("port: 0x%x", curr_loggy->data.sendto.address.sin_port);
+                                        ImGui::Text("address: %s", curr_loggy->data.sendto.address.IP.c_str());
                                         break;}
                                     case t_wsa_send: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsasend.flags);
@@ -1042,8 +1052,8 @@ int injected_window_main(){
                                             if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendto.buffer[i], 0)); }
                                             ImGui::PopID();
                                         }
-                                        ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.wsasendto.to.size(), BufferShortPreview(curr_loggy->data.wsasendto.to).c_str());
-                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendto.to, 0)); }
+                                        ImGui::Text("port: 0x%x", curr_loggy->data.wsasendto.address.sin_port);
+                                        ImGui::Text("address: %s", curr_loggy->data.wsasendto.address.IP.c_str());
                                         break;}
                                     case t_wsa_send_msg: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsasendmsg.flags);
@@ -1056,8 +1066,8 @@ int injected_window_main(){
                                             if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendmsg.buffer[i], 0)); }
                                             ImGui::PopID();
                                         }
-                                        ImGui::Text("dest: 0x%llx [%s]", curr_loggy->data.wsasendmsg.to.size(), BufferShortPreview(curr_loggy->data.wsasendmsg.to).c_str());
-                                        if (ImGui::Button("Copy#1")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendmsg.to, 0)); }
+                                        ImGui::Text("port: 0x%x", curr_loggy->data.wsasendmsg.address.sin_port);
+                                        ImGui::Text("address: %s", curr_loggy->data.wsasendmsg.address.IP.c_str());
                                         ImGui::Text("control: 0x%llx [%s]", curr_loggy->data.wsasendmsg.control_buffer.size(), BufferShortPreview(curr_loggy->data.wsasendmsg.control_buffer).c_str());
                                         if (ImGui::Button("Copy#2")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsasendmsg.control_buffer, 0)); }
                                         break;}
@@ -1071,8 +1081,8 @@ int injected_window_main(){
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.recvfrom.flags);
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.recvfrom.buffer.size(), BufferShortPreview(curr_loggy->data.recvfrom.buffer).c_str());
                                         if (ImGui::Button("Copy#1")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.recvfrom.buffer, 0)); }
-                                        ImGui::Text("from: 0x%llx [%s]", curr_loggy->data.recvfrom.from.size(), BufferShortPreview(curr_loggy->data.recvfrom.from).c_str());
-                                        if (ImGui::Button("Copy#2")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.recvfrom.from, 0)); }
+                                        ImGui::Text("port: 0x%x", curr_loggy->data.recvfrom.address.sin_port);
+                                        ImGui::Text("address: %s", curr_loggy->data.recvfrom.address.IP.c_str());
                                         break;}
                                     case t_wsa_recv: {
                                         ImGui::Text("flags: 0x%x", curr_loggy->data.wsarecv.flags);
@@ -1097,8 +1107,8 @@ int injected_window_main(){
                                             if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsarecvfrom.buffer[i], 0)); }
                                             ImGui::PopID();
                                         }
-                                        ImGui::Text("from: 0x%llx [%s]", curr_loggy->data.wsarecvfrom.from.size(), BufferShortPreview(curr_loggy->data.wsarecvfrom.from).c_str());
-                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wsarecvfrom.from, 0)); }
+                                        ImGui::Text("port: 0x%x", curr_loggy->data.wsarecvfrom.address.sin_port);
+                                        ImGui::Text("address: %s", curr_loggy->data.wsarecvfrom.address.IP.c_str());
                                         break;}
                                     // HTTP CLASS UI //
                                     case t_http_open: {

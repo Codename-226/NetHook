@@ -15,6 +15,43 @@ inline bool HookMacro(LPVOID src_func, LPVOID override_func, T** src_func_call_p
 }
 
 
+__addr convert_addr_struct(sockaddr* addr) {
+    __addr thingo = {};
+    if (!addr) return thingo;
+    char str[INET6_ADDRSTRLEN];  // 46 bytes
+    if (addr->sa_family == AF_INET) {
+        sockaddr_in* ipv4 = (sockaddr_in*)addr;
+        thingo.sin_family = ipv4->sin_family;
+        thingo.sin_port = ipv4->sin_port;
+        thingo.IP = inet_ntop(AF_INET, &ipv4->sin_addr, str, INET_ADDRSTRLEN);
+    }
+    else if (addr->sa_family == AF_INET6) {
+        sockaddr_in6* ipv6 = (sockaddr_in6*)addr;
+        thingo.sin_family = ipv6->sin6_family;
+        thingo.sin_port = ipv6->sin6_port;
+        thingo.sin6_flowinfo = ipv6->sin6_flowinfo;
+        thingo.sin6_scope_id = ipv6->sin6_scope_id;
+        thingo.IP = inet_ntop(AF_INET6, &ipv6->sin6_addr, str, INET6_ADDRSTRLEN);
+    }
+    return thingo;
+}
+bool try_name_log_from_address(string IP, SocketLogs* log) {
+    // and now we can apply a name to our socket
+    string socket_source_name = CheckHost(IP);
+    if (!socket_source_name.empty()) {
+        size_t len = socket_source_name.size();
+        if (len < sizeof(log->custom_label)) {
+            memcpy(log->custom_label, socket_source_name.c_str(), len + 1); // include null terminator
+        }
+        else {
+            // Truncate safely and null-terminate
+            memcpy(log->custom_label, socket_source_name.c_str(), sizeof(log->custom_label) - 1);
+            log->custom_label[sizeof(log->custom_label) - 1] = '\0';
+        }
+        return true;
+    }
+    return false;
+}
 
 typedef int (WSAAPI* send_func)(SOCKET, const char*, int, int);
 send_func send_func_ptr = NULL;
@@ -52,8 +89,9 @@ int hooked_sendto(SOCKET s, const char* buf, int len, int flags, const sockaddr*
     global_io_send_log.log(actual_bytes_sent);
     event->sendto.flags = flags;
     event->sendto.buffer = vector<char>(buf, buf + len);
-    event->sendto.to = vector<char>((char*)to, (char*)(to) + tolen);
+    event->sendto.address = convert_addr_struct((sockaddr*)to);
     log_malloc(len);
+    try_name_log_from_address(event->sendto.address.IP, log);
 
     LogParamsEntry("sendto()", {
         param_entry{"socket", (uint64_t)s},
@@ -130,7 +168,8 @@ int hooked_WSAsendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD 
     global_io_send_log.log(event->wsasendto.bytes_sent);
     event->wsasendto.flags = dwFlags;
     event->wsasendto.completion_routine = lpCompletionRoutine;
-    event->wsasendto.to = vector<char>((char*)lpTo, (char*)(lpTo) + iTolen);
+    event->wsasendto.address = convert_addr_struct((sockaddr*)lpTo);
+    try_name_log_from_address(event->wsasendto.address.IP, log);
 
     if (dwBufferCount > 0)
         LogParamsEntry("WSAsendto()", {
@@ -177,7 +216,9 @@ int hooked_WSAsendmsg(SOCKET s, LPWSAMSG lpMsg, DWORD dwFlags, LPDWORD lpNumberO
     event->wsasendmsg.flags = dwFlags;
     event->wsasendmsg.msg_flags = dwFlags;
     event->wsasendmsg.completion_routine = lpCompletionRoutine;
-    event->wsasendmsg.to = vector<char>((char*)lpMsg->name, (char*)(lpMsg->name) + lpMsg->namelen);
+    //event->wsasendmsg.to = vector<char>((char*)lpMsg->name, (char*)(lpMsg->name) + lpMsg->namelen);
+    event->wsasendmsg.address = convert_addr_struct(lpMsg->name);
+    try_name_log_from_address(event->wsasendmsg.address.IP, log);
     event->wsasendmsg.control_buffer = vector<char>(lpMsg->Control.buf, lpMsg->Control.buf + lpMsg->Control.len);
 
     LogParamsEntry("WSAsendmsg()", { param_entry{"socket", (uint64_t)s}, }, t_wsa_send_msg);
@@ -221,9 +262,9 @@ int hooked_recv_from(SOCKET s, char* buf, int len, int flags, sockaddr* from, in
     int actual_bytes_recieved = len_recieved >= 0 ? len_recieved : 0;
     event->recvfrom.flags = flags;
     event->recvfrom.buffer = vector<char>(buf, buf + actual_bytes_recieved);
-    if (fromlen && from)
-         event->recvfrom.from = vector<char>((char*)from, (char*)(from) + *fromlen);
-    else event->recvfrom.from = vector<char>();
+    event->recvfrom.address = convert_addr_struct(from);
+    try_name_log_from_address(event->recvfrom.address.IP, log);
+
     log->recvfrom_log.log(actual_bytes_recieved);
     log->total_recv_log.log(actual_bytes_recieved);
     global_io_recv_log.log(actual_bytes_recieved);
@@ -286,9 +327,8 @@ int hooked_wsa_recv_from(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDW
         event->wsarecvfrom.bytes_recived = *lpNumberOfBytesRecvd;
     else event->wsarecvfrom.bytes_recived = 0;
 
-    if (lpFrom && lpFromlen)
-        event->recvfrom.from = vector<char>((char*)lpFrom, (char*)(lpFrom)+*lpFromlen);
-    else event->recvfrom.from = vector<char>();
+    event->wsarecvfrom.address = convert_addr_struct(lpFrom);
+    try_name_log_from_address(event->wsarecvfrom.address.IP, log);
 
     event->wsarecvfrom.buffer = vector<vector<char>>();
     int total_size = 0;
@@ -581,25 +621,6 @@ hostent* hooked_gethostbyname(const char* name) {
 
 
 
-__addr convert_addr_struct(sockaddr* addr) {
-    __addr thingo = {};
-    char str[INET6_ADDRSTRLEN];  // 46 bytes
-    if (addr->sa_family == AF_INET) {
-        sockaddr_in* ipv4 = (sockaddr_in*)addr;
-        thingo.sin_family = ipv4->sin_family;
-        thingo.sin_port = ipv4->sin_port;
-        thingo.IP = inet_ntop(AF_INET, &ipv4->sin_addr, str, INET_ADDRSTRLEN);
-    }
-    else if (addr->sa_family == AF_INET6) {
-        sockaddr_in6* ipv6 = (sockaddr_in6*)addr;
-        thingo.sin_family = ipv6->sin6_family;
-        thingo.sin_port = ipv6->sin6_port;
-        thingo.sin6_flowinfo = ipv6->sin6_flowinfo;
-        thingo.sin6_scope_id = ipv6->sin6_scope_id;
-        thingo.IP = inet_ntop(AF_INET6, &ipv6->sin6_addr, str, INET6_ADDRSTRLEN);
-    }
-    return thingo;
-}
 
 typedef INT(*GetAddrInfoW_func)(PCWSTR pNodeName, PCWSTR pServiceName, const ADDRINFOW* pHints, PADDRINFOW* ppResult);
 GetAddrInfoW_func GetAddrInfoW_ptr = NULL;
@@ -650,7 +671,7 @@ INT hooked_GetAddrInfoW(PCWSTR pNodeName, PCWSTR pServiceName, const ADDRINFOW* 
 typedef INT(*GetAddrInfoExW_func)(PCWSTR pName, PCWSTR pServiceName, DWORD dwNameSpace, LPGUID lpNspId, const ADDRINFOEXW* hints, PADDRINFOEXW* ppResult, timeval* timeout, LPOVERLAPPED lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, LPHANDLE lpHandle);
 GetAddrInfoExW_func GetAddrInfoExW_ptr = NULL;
 INT hooked_GetAddrInfoExW(PCWSTR pName, PCWSTR pServiceName, DWORD dwNameSpace, LPGUID lpNspId, const ADDRINFOEXW* hints, PADDRINFOEXW* ppResult, timeval* timeout, LPOVERLAPPED lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, LPHANDLE lpHandle) {
-    LogParamsEntry("hooked_GetAddrInfoExW()", {}, t_generic_log); 
+    //LogParamsEntry("hooked_GetAddrInfoExW()", {}, t_generic_log); 
     auto result = GetAddrInfoExW_ptr(pName, pServiceName, dwNameSpace, lpNspId, hints, ppResult, timeout, lpOverlapped, lpCompletionRoutine, lpHandle);
     if (!ppResult) return result; // skip if we have nothing to log??
 
@@ -805,7 +826,7 @@ INT hooked_WSALookupServiceNextW(HANDLE hLookup, DWORD dwControlFlags, LPDWORD l
 typedef int(*connect_func)(SOCKET s, const sockaddr* name, int namelen);
 connect_func connect_ptr = NULL;
 int hooked_connect(SOCKET s, const sockaddr* name, int namelen) {
-    LogParamsEntry("hooked_connect()", {}, t_generic_log);
+    //LogParamsEntry("hooked_connect()", {}, t_generic_log);
     auto result = connect_ptr(s, name, namelen);
     if (!name) return result; // nothing to log1!!
 
@@ -814,20 +835,7 @@ int hooked_connect(SOCKET s, const sockaddr* name, int namelen) {
 
     event->connect.namelen = namelen;
     event->connect.address = convert_addr_struct((sockaddr*)name); // what the hell
-
-    // and now we can apply a name to our socket
-    string socket_source_name = CheckHost(event->connect.address.IP);
-    if (!socket_source_name.empty()) {
-        size_t len = socket_source_name.size();
-        if (len < sizeof(log->custom_label)) {
-            memcpy(log->custom_label, socket_source_name.c_str(), len + 1); // include null terminator
-        }
-        else {
-            // Truncate safely and null-terminate
-            memcpy(log->custom_label, socket_source_name.c_str(), sizeof(log->custom_label) - 1);
-            log->custom_label[sizeof(log->custom_label) - 1] = '\0';
-        }
-    }
+    try_name_log_from_address(event->connect.address.IP, log);
 
     // do not log IO transaction
     LogParamsEntry("connect()", { param_entry{event->connect.address.IP.c_str(),0},param_entry{log->custom_label,0},}, t_connect);
