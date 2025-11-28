@@ -20,6 +20,7 @@ using namespace std;
 //#include <Windows.h>
 #include <winhttp.h>
 
+#include <objbase.h>   // StringFromGUID2
 //#include <atlstr.h>
 
 #include "Hooking/LooseStructs.h"

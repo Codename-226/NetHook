@@ -108,6 +108,9 @@
     <ClInclude Include="SRC\SaveState.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SRC\Hooking\Hooks_webrtc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">

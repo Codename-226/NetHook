@@ -168,6 +168,7 @@
     <ClInclude Include="SRC\GUI\Window.h" />
     <ClInclude Include="SRC\Hooking\DebugUtils.h" />
     <ClInclude Include="SRC\Hooking\Hooks.h" />
+    <ClInclude Include="SRC\Hooking\Hooks_webrtc.h" />
     <ClInclude Include="SRC\Hooking\LooseStructs.h" />
     <ClInclude Include="SRC\Hooking\ParamHelper.h" />
     <ClInclude Include="SRC\Loggers\DumpLog.h" />

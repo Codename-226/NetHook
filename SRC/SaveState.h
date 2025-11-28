@@ -62,6 +62,7 @@ void SaveConfigs() {
     WriteInt(file, (int)filter_out_log_types);
     WriteBool(file, (int)filter_by_is_url);
     WriteBool(file, (int)filter_by_has_lifetime_activity);
+    WriteBool(file, (int)filter_by_is_ext);
 
     WriteBool(file, 0);// end of file indicator!! i think due to the read int func, we need to have extra padding or else it'll determine that this next last value is actually null/EOF and return 0
     file.close();
@@ -106,6 +107,7 @@ void LoadConfigs() {
     filter_out_log_types = (socket_event_type)ReadInt(file);
     filter_by_is_url = ReadBool(file);
     filter_by_has_lifetime_activity = ReadBool(file);
+    filter_by_is_ext = ReadBool(file);
 
     file.close();
 }

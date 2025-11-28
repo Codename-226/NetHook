@@ -842,6 +842,8 @@ int hooked_connect(SOCKET s, const sockaddr* name, int namelen) {
     return result;
 }
 
+
+#include "Hooks_webrtc.h"
 bool LoadHooks() {
     if (MH_Initialize() != MH_OK) return false;
 
@@ -919,6 +921,10 @@ bool LoadHooks() {
 
     if (!HookMacro(&connect, &hooked_connect, &connect_ptr)) return false;
     LogEntry("connect hooked", t_generic_log);
+
+    // MCC extension stuff
+    if (!LoadHooks_MCC_Webrtc()) return false;
+    LogEntry("extension webrtc hooked", t_generic_log);
 
     return true;
 }

@@ -74,6 +74,7 @@ static bool filter_by_is_socket = false;
 static bool filter_by_is_http = false;
 static bool filter_by_is_url = false;
 static bool filter_by_has_custom_name = false;
+static bool filter_by_is_ext = false;
 
 
 
@@ -347,6 +348,10 @@ int injected_window_main(){
                     displayLogFilter("Exclude LookupServiceBegin", t_wsa_lookup_service_begin);
                     displayLogFilter("Exclude LookupServiceNext", t_wsa_lookup_service_next);
                     displayLogFilter("Exclude Connect", t_connect);
+                    displayLogFilter("Exclude NetworkSessionSend", t_ns_send);
+                    displayLogFilter("Exclude WRTCDataChannelSend", t_wrtc_send);
+                    displayLogFilter("Exclude SignalSend", t_signal_send);
+                    displayLogFilter("Exclude SignalRecv", t_signal_recv);
 
                     displayLogFilter("Exclude Error Log", t_error_log);
                     displayLogFilter("Exclude Generic Log", t_generic_log);
@@ -630,6 +635,7 @@ int injected_window_main(){
                 ImGui::MenuItem("exclude: socket", "", &filter_by_is_socket);
                 ImGui::MenuItem("exclude: http", "", &filter_by_is_http);
                 ImGui::MenuItem("exclude: url", "", &filter_by_is_url);
+                ImGui::MenuItem("exclude: ext", "", &filter_by_is_ext);
 
                 ImGui::Separator();
                 if (ImGui::MenuItem("sort: creation timestamp", "", socket_sort_type == sort_by_timestamp)) socket_sort_type = sort_by_timestamp;
@@ -695,6 +701,7 @@ int injected_window_main(){
                 if (filter_by_is_socket && pair.second->source_type == st_Socket)  continue;
                 if (filter_by_is_http && pair.second->source_type == st_WinHttp)   continue;
                 if (filter_by_is_url && pair.second->source_type == st_URL)        continue;
+                if (filter_by_is_ext && pair.second->source_type == st_ext)        continue;
 
                 filtered_sockets.push_back(pair.second);
                 if (pair.second->source_type == st_Socket)
@@ -956,6 +963,10 @@ int injected_window_main(){
                                     case t_wsa_lookup_service_begin: ImGui::Text("(LookupServiceBegin)"); break;
                                     case t_wsa_lookup_service_next:  ImGui::Text("(LookupServiceNext) "); break;
                                     case t_connect:                  ImGui::Text("(Connect)           "); break;
+                                    case t_ns_send:                  ImGui::Text("(NetworkSessionSend)"); break;
+                                    case t_wrtc_send:                ImGui::Text("(RTCDataChannelSend)"); break;
+                                    case t_signal_send:              ImGui::Text("(SignallingSend)    "); break;
+                                    case t_signal_recv:              ImGui::Text("(SignallingRecieve) "); break;
                                     }
                                     ImGui::SameLine();
                                     if (curr_loggy->error_code)
@@ -1012,6 +1023,10 @@ int injected_window_main(){
                                     case t_wsa_lookup_service_begin: ImGui::Text("(LookupServiceBegin)"); break;
                                     case t_wsa_lookup_service_next:  ImGui::Text("(LookupServiceNext)");  break;
                                     case t_connect:                  ImGui::Text("(Connect)");            break;
+                                    case t_ns_send:                  ImGui::Text("(NetworkSessionSend)"); break;
+                                    case t_wrtc_send:                ImGui::Text("(RTCDataChannelSend)"); break;
+                                    case t_signal_send:              ImGui::Text("(SignallingSend)");     break;
+                                    case t_signal_recv:              ImGui::Text("(SignallingRecieve)");  break;
                                     }
                                     ImGui::Text("Status: %s", ErrorCodeToString(curr_loggy->error_code).c_str());
                                     ImGui::NewLine();
@@ -1283,6 +1298,45 @@ int injected_window_main(){
                                         ImGui::Text("length: 0x%x", curr_loggy->data.connect.namelen);
                                         break;}
 
+
+                                    case t_ns_send: {
+                                        ImGui::Text("username: %s", curr_loggy->data.ns_send.username.c_str());
+                                        ImGui::Text("password: %s", curr_loggy->data.ns_send.password.c_str());
+                                        ImGui::Text("reliable: 0x%x", curr_loggy->data.ns_send.reliable);
+                                        ImGui::Text("param5: 0x%x", curr_loggy->data.ns_send.param5);
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.ns_send.buffer.size(), BufferShortPreview(curr_loggy->data.ns_send.buffer).c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.ns_send.buffer, 0)); }
+
+                                        ImGui::Text("addresses: ");
+                                        for (int i = 0; i < curr_loggy->data.ns_send.servers.size(); i++) {
+                                            ImGui::PushID(i);
+                                            ImGui::Text("%d - url: %s", i, curr_loggy->data.ns_send.servers[i].url.c_str());
+                                            ImGui::Text("%d - username: %s", i, curr_loggy->data.ns_send.servers[i].username.c_str());
+                                            ImGui::Text("%d - password: %s", i, curr_loggy->data.ns_send.servers[i].password.c_str());
+                                            ImGui::PopID();
+                                        }
+                                        break;}
+                                    case t_wrtc_send: {
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.wrtc_send.buffer.size(), BufferShortPreview(curr_loggy->data.wrtc_send.buffer).c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wrtc_send.buffer, 0)); }
+                                        break;}
+                                    case t_signal_send: {
+                                        ImGui::Text("code: 0x%x", (int)curr_loggy->data.signal_send.code);
+                                        ImGui::Text("GUID: {%s}", GuidToString(curr_loggy->data.signal_send.guid).c_str());
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.signal_send.buffer.size(), BufferShortPreview(curr_loggy->data.signal_send.buffer).c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.signal_send.buffer, 0)); }
+                                        break;}
+                                    case t_signal_recv: {
+                                        ImGui::Text("label: %s", curr_loggy->data.signal_recv.label_str.c_str());
+                                        ImGui::Text("response: %s", curr_loggy->data.signal_recv.response_str.c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(curr_loggy->data.signal_recv.response_str); }
+                                        break;
+                                    }
+
+
+
+
+
                                     }
 
                                     if (curr_loggy->callstack)
@@ -1329,6 +1383,15 @@ int injected_window_main(){
                                 display_iolog_details("total operations |", &selected_socket->total_recv_log);
                                 ImGui::NewLine();
                                 display_iolog_details("operations       |", &selected_socket->recv_log);
+                            }
+                            else if (selected_socket->source_type == st_ext) {
+                                display_iolog_details("total sent           |", &selected_socket->total_send_log);
+                                display_iolog_details("total read           |", &selected_socket->total_recv_log);
+                                ImGui::NewLine();
+                                display_iolog_details("NetworkSession Sent  |", &selected_socket->send_log);
+                                display_iolog_details("WRTCDataChannel Sent |", &selected_socket->sendto_log);
+                                display_iolog_details("Signalling Sent      |", &selected_socket->wsasend_log);
+                                display_iolog_details("Signalling Recieved  |", &selected_socket->recv_log);
                             }
                             ImGui::EndTabItem();
                         }

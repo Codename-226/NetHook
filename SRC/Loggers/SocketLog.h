@@ -302,6 +302,38 @@ public:
 	int namelen;
 };
 
+// MCC EXTENSIONS
+class __turn_server_info {
+public:
+	string url;
+	string username;
+	string password;
+};
+class socentry_mcc_ns_send {
+public:
+	vector<char> buffer;
+	vector<__turn_server_info> servers;
+	string username;
+	string password;
+	int reliable;
+	int param5;
+};
+class socentry_mcc_wrtc_send {
+public:
+	vector<char> buffer;
+};
+class socentry_mcc_signal_send {
+public:
+	char code;
+	GUID guid;
+	vector<char> buffer;
+};
+class socentry_mcc_signal_recv {
+public:
+	string label_str;
+	string response_str;
+};
+
 
 
 //class httpentry_create_url {
@@ -371,7 +403,6 @@ string CheckHost(string IP) {
 	return mapped_hosts[IP];
 }
 
-
 class socket_log_entry_data {
 public:
 	union {
@@ -404,6 +435,11 @@ public:
 		socentry_wsa_lookup_service_next wsa_lookup_service_next;
 
 		socentry_connect connect;
+
+		socentry_mcc_ns_send ns_send;
+		socentry_mcc_wrtc_send wrtc_send;
+		socentry_mcc_signal_send signal_send;
+		socentry_mcc_signal_recv signal_recv;
 	};
 };
 
@@ -508,7 +544,7 @@ public:
 };
 
 
-enum SourceType { st_Socket, st_WinHttp, st_URL };
+enum SourceType { st_Socket, st_WinHttp, st_URL, st_ext};
 const int socket_custom_label_len = 256;
 class SocketLogs {
 public:
@@ -524,14 +560,14 @@ public:
 	IOLog total_send_log = {};
 	IOLog total_recv_log = {};
 
-	IOLog send_log = {}; // also HTTP write
-	IOLog sendto_log = {}; // also HTTP send request
-	IOLog wsasend_log = {};
+	IOLog send_log = {};		// also HTTP write			| also ns_sent
+	IOLog sendto_log = {};		// also HTTP send request	| also wrtc_sent
+	IOLog wsasend_log = {};		//							| also sigal_sent
 	IOLog wsasendto_log = {};
 	IOLog wsasendmsg_log = {};
 
-	IOLog recv_log = {}; // also HTTP read
-	IOLog recvfrom_log = {}; // also HTTP query headers
+	IOLog recv_log = {};		// also HTTP read			| also signal_recv
+	IOLog recvfrom_log = {};	// also HTTP query headers	|
 	IOLog wsarecv_log = {};
 	IOLog wsarecvfrom_log = {};
 
@@ -570,6 +606,12 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 		if ((int)s == -1) {
 			memcpy(log_container->custom_label, "[GLOBAL EVENTS]", 16);
 			log_container->source_type = st_URL;
+			log_container->timestamp = 0;
+		}
+		if ((int)s == -2) {
+			memcpy(log_container->custom_label, "[SIMPLENETWORK EVENTS]", 23);
+			log_container->source_type = st_ext;
+			log_container->timestamp = 0;
 		}
 	}
 
@@ -618,6 +660,14 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 		break;
 	case t_connect:
 		new_socket_event->category = c_create;
+		break;
+	case t_ns_send:
+	case t_wrtc_send:
+	case t_signal_send:
+		new_socket_event->category = c_send;
+		break;
+	case t_signal_recv:
+		new_socket_event->category = c_recieve;
 		break;
 	}
 	// append

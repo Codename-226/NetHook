@@ -217,3 +217,22 @@ bool CopyToClipboard(const std::string& text) {
     CloseClipboard();
     return true;
 }
+
+std::string GuidToString(const GUID& guid) {
+    wchar_t guidString[39]; // 38 chars + null terminator
+    if (StringFromGUID2(guid, guidString, 39)) {
+        char charGuidString[39];
+        size_t converted = 0;
+        errno_t err = wcstombs_s(
+            &converted,              // number of bytes converted
+            charGuidString,          // destination buffer
+            sizeof(charGuidString),  // size of destination buffer
+            guidString,              // source wide string
+            _TRUNCATE                // convert until buffer full
+        );
+        if (err == 0) {
+            return std::string(charGuidString);
+        }
+    }
+    return "failed guid convert";
+}
