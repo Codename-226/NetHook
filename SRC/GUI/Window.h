@@ -1322,7 +1322,7 @@ int injected_window_main(){
                                         break;}
                                     case t_signal_send: {
                                         ImGui::Text("code: 0x%x", (int)curr_loggy->data.signal_send.code);
-                                        ImGui::Text("GUID: {%s}", GuidToString(curr_loggy->data.signal_send.guid).c_str());
+                                        ImGui::Text("GUID: %s", GuidToString(curr_loggy->data.signal_send.guid).c_str());
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.signal_send.buffer.size(), BufferShortPreview(curr_loggy->data.signal_send.buffer).c_str());
                                         if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.signal_send.buffer, 0)); }
                                         break;}

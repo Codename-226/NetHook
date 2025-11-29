@@ -51,17 +51,14 @@ void* hooked_ns_send(void* session, char* packet, unsigned long long packet_size
 typedef void* (*wrtc_send_func)(void* param_1, char* buffer_struct);
 wrtc_send_func wrtc_send_ptr = NULL;
 void* hooked_wrtc_send(void* param_1, char* buffer_struct) {
-    LogEntry("hooked_wrtc_send1()", t_generic_log);
+    //LogEntry("hooked_wrtc_send1()", t_generic_log);
     auto result = wrtc_send_ptr(param_1, buffer_struct);
 
     SocketLogs* log;
     auto event = LogSocketEvent(-2, t_wrtc_send, "wrtc_send()", &log, 0);
 
-    LogEntry("hooked_wrtc_send2()", t_generic_log);
     auto buffer_ptr = ((char***)buffer_struct)[0][3];
-    LogEntry("hooked_wrtc_send3()", t_generic_log);
     auto buffer_size = ((int**)buffer_struct)[0][2];
-    LogEntry("hooked_wrtc_send4()", t_generic_log);
     event->wrtc_send.buffer = vector<char>(buffer_ptr, buffer_ptr + buffer_size);
 
     log->sendto_log.log(buffer_size);
@@ -73,10 +70,10 @@ void* hooked_wrtc_send(void* param_1, char* buffer_struct) {
 
 
 
-typedef void* (*signal_send_func)(void* param_1, char code, void* guid, char* buffer);
+typedef void* (*signal_send_func)(void* param_1, long long code, void* guid, char* buffer);
 signal_send_func signal_send_ptr = NULL;
-void* hooked_signal_send(void* param_1, char code, void* guid, char* buffer) {
-    LogEntry("hooked_signal_send1()", t_generic_log);
+void* hooked_signal_send(void* param_1, long long code, void* guid, char* buffer) {
+    //LogEntry("hooked_signal_send1()", t_generic_log);
     auto result = signal_send_ptr(param_1, code, guid, buffer);
 
     SocketLogs* log;
@@ -88,7 +85,7 @@ void* hooked_signal_send(void* param_1, char code, void* guid, char* buffer) {
     if (size > 15) buffer_actual = ((char**)buffer)[0]; // note: in observed structures, this size variable is 1 greater than it should be ??? so theres 2 null terminators instead of 1??
     
     event->signal_send.buffer = vector<char>(buffer_actual, buffer_actual + size);
-    event->signal_send.code = code;
+    event->signal_send.code = (char)code;
     event->signal_send.guid = *(GUID*)guid;
 
     log->wsasend_log.log(size);
@@ -101,7 +98,7 @@ void* hooked_signal_send(void* param_1, char code, void* guid, char* buffer) {
 typedef void* (*signal_recv_func)(void* param_1, void* label_str, void* response_str);
 signal_recv_func signal_recv_ptr = NULL;
 void* hooked_signal_recv(void* param_1, void* label_str, void* response_str) {
-    LogEntry("hooked_signal_recv1()", t_generic_log);
+    //LogEntry("hooked_signal_recv1()", t_generic_log);
     auto result = signal_recv_ptr(param_1, label_str, response_str);
 
     SocketLogs* log;
@@ -143,8 +140,8 @@ bool LoadHooks_MCC_Webrtc() {
     if (!HookMacro(((char*)simplenetworkbase + 0x1BD8D8), &hooked_wrtc_send, &wrtc_send_ptr)) return false;
     LogParamsEntry("wrtc_send hooked", { {"wrtc_send ptr", (uint64_t)simplenetworkbase + 0x1BD8D8} }, t_generic_log);
 
-    //if (!HookMacro(((char*)simplenetworkbase + 0x0D4130), &hooked_signal_send, &signal_send_ptr)) return false;
-    //LogParamsEntry("signal_send hooked", { {"signal_send ptr", (uint64_t)simplenetworkbase + 0x0D4130} }, t_generic_log);
+    if (!HookMacro(((char*)simplenetworkbase + 0x0D4130), &hooked_signal_send, &signal_send_ptr)) return false;
+    LogParamsEntry("signal_send hooked", { {"signal_send ptr", (uint64_t)simplenetworkbase + 0x0D4130} }, t_generic_log);
 
     if (!HookMacro(((char*)simplenetworkbase + 0x0D3768), &hooked_signal_recv, &signal_recv_ptr)) return false;
     LogParamsEntry("signal_recv hooked", { {"signal_recv ptr", (uint64_t)simplenetworkbase + 0x0D3768} }, t_generic_log);
