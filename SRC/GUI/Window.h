@@ -118,6 +118,18 @@ bool socket_comp_activity_timestamp(SocketLogs* a, SocketLogs* b) {
     return (a_last_activity < b_last_activity) ^ invert;
 }
 
+float bit_usage_comp(vector<unsigned char> packet_mask) {
+    if (!packet_mask.size()) return -1.0f;
+    // calculate amount of bits used in packet!!!
+    int num_of_bits = 0;
+    int num_of_bits_used = 0;
+    for (const auto var : packet_mask) {
+        num_of_bits += 8;
+        num_of_bits_used += int((var & 1) == 1) + int((var & 2) == 2) + int((var & 4) == 4) + int((var & 8) == 8) + int((var & 16) == 16) + int((var & 32) == 32) + int((var & 64) == 64) + int((var & 128) == 128);
+    }
+    return (float)num_of_bits / (float)num_of_bits_used;
+}
+
 std::string ErrorCodeToString(DWORD error_code){
     if (error_code == 0) return std::string("Success");
 
@@ -265,6 +277,7 @@ int injected_window_main(){
     bool show_plot_demo_window = false;
     bool show_console_window = false;
     bool show_hostnames_window = false;
+    bool show_wrtc_packets_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -320,6 +333,7 @@ int injected_window_main(){
                     ImGui::EndMenu();
                 }
                 ImGui::MenuItem("Hostnames", nullptr, &show_hostnames_window);
+                ImGui::MenuItem("WRTC Packets", nullptr, &show_wrtc_packets_window);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Edit")) {
@@ -424,6 +438,102 @@ int injected_window_main(){
                 if (ImGui::Button("Export"))
                     DumpToNotepad(output);
                 ImGui::TextUnformatted(output.c_str());
+            }
+            ImGui::End();
+        }
+        if (show_wrtc_packets_window) {
+            if (ImGui::Begin("Web RTC sent packets", &show_wrtc_packets_window, ImGuiWindowFlags_HorizontalScrollbar)) {
+                struct packet_grouping {
+                    // array of all the packets matching this header and size
+                    vector<vector<char>> packets = {};
+                    // OR |= of all packets together
+                    vector<unsigned char> packet_mask = {};
+                    // a hit counter for each bit of the mask (so len = 8 x packet_size)
+                    vector<uint32_t> bit_hit_counts = {};
+                };
+                //  p5,           header,   size,     packets & similarities
+                map<int, map<unsigned char, map<int, packet_grouping>>> sorted_packets = {};
+
+                //LogEntry("p5 logger: state 0");
+                // very redundant system here, please simplify
+                SocketLogs* curr_sockey = 0;
+                for (const auto pair : logged_sockets) {
+                    if (pair.first == -2) {
+                        curr_sockey = pair.second;
+                        break;
+                    }
+                }
+                if (curr_sockey) {
+                    //LogEntry("p5 logger: state 1");
+                    for (const auto loggy : curr_sockey->events) {
+                        if (loggy->type == t_ns_send && loggy->data.ns_send.buffer.size() ) {// yeah you're not going to catch me out with null buffers thanks
+                            unsigned char header = loggy->data.ns_send.buffer[0];
+                            int p5 = loggy->data.ns_send.param5;
+                            int length = loggy->data.ns_send.buffer.size();
+                            //map<unsigned char, map<int, packet_grouping>> by_headers = sorted_packets[p5];
+                            //LogEntry("p5 logger: state 2");
+                            //map<int, packet_grouping> by_length = by_headers[header];
+                            //LogEntry("p5 logger: state 3");
+                            //packet_grouping* packet_grouping = &by_length[length];
+                            packet_grouping* packet_grouping = &(sorted_packets[p5][header][length]);
+                            //LogEntry("p5 logger: state 4");
+
+                            // check whether grouping needs an init
+                            if (!packet_grouping->packet_mask.size()) {
+                                packet_grouping->packet_mask.assign(length, 0);
+                                packet_grouping->bit_hit_counts.assign(length*8, 0);
+                            }
+                            //LogEntry("p5 logger: state 5");
+
+                            // now add in our packet and map the hits
+                            packet_grouping->packets.push_back(loggy->data.ns_send.buffer);
+                            for (int i = 0; i < loggy->data.ns_send.buffer.size(); i++) {
+                                unsigned char s = (unsigned char)loggy->data.ns_send.buffer[i];
+                                packet_grouping->packet_mask[i] |= s;
+                                packet_grouping->bit_hit_counts[(i*8) + 0] = s & 128;
+                                packet_grouping->bit_hit_counts[(i*8) + 1] = s & 64;
+                                packet_grouping->bit_hit_counts[(i*8) + 2] = s & 32;
+                                packet_grouping->bit_hit_counts[(i*8) + 3] = s & 16;
+                                packet_grouping->bit_hit_counts[(i*8) + 4] = s & 8;
+                                packet_grouping->bit_hit_counts[(i*8) + 5] = s & 4;
+                                packet_grouping->bit_hit_counts[(i*8) + 6] = s & 2;
+                                packet_grouping->bit_hit_counts[(i*8) + 7] = s & 1;
+                            }
+                        }
+                    }
+                    
+
+
+
+                   // LogEntry("p5 logger: state 6");
+                    ImGui::Text("p5");
+                    int imgui_id = 0;
+                    for (const auto& [p5, by_headers] : sorted_packets) {
+                        ImGui::Text("- %d", p5);
+                        for (const auto& [header, by_len] : by_headers) {
+                            for (const auto& [length, details] : by_len) {
+                                ImGui::PushID(imgui_id); imgui_id++;
+                                ImGui::Text("  -> H:%d L:%d | hits: %d | bit_coverage: %f", header, length, details.packets.size(), bit_usage_comp(details.packet_mask));
+                                ImGui::SameLine();
+                                if (ImGui::Button("Export"));
+                                ImGui::PopID();
+                            }
+                        }
+                    }
+                    //LogEntry("p5 logger: state 7");
+                }
+
+
+
+
+
+                //for (const auto& [ip, host] : mapped_hosts)
+                //    output += ip + " -> " + host + "\n";
+                //if (ImGui::Button("Export"))
+                //    DumpToNotepad(output);
+                //ImGui::TextUnformatted(output.c_str());
+                //LogEntry("thing worked nicely with no errors!!");
+                //show_wrtc_packets_window = false; // close automatically for now!!!
             }
             ImGui::End();
         }
