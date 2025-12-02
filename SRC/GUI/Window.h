@@ -127,7 +127,7 @@ float bit_usage_comp(vector<unsigned char> packet_mask) {
         num_of_bits += 8;
         num_of_bits_used += int((var & 1) == 1) + int((var & 2) == 2) + int((var & 4) == 4) + int((var & 8) == 8) + int((var & 16) == 16) + int((var & 32) == 32) + int((var & 64) == 64) + int((var & 128) == 128);
     }
-    return (float)num_of_bits / (float)num_of_bits_used;
+    return (float)num_of_bits_used / (float)num_of_bits;
 }
 
 std::string ErrorCodeToString(DWORD error_code){
@@ -217,6 +217,27 @@ std::string BufferShortPreview(vector<char> preview_buffer, int maxbytes = 32) {
         if (maxbytes && i >= maxbytes) { ss << "..."; break; };
     }
     return ss.str();
+}
+std::string vectorToBitString(const std::vector<char>& data) {
+    std::string result;
+    result.reserve(data.size() * 8); // preallocate for efficiency
+    for (unsigned char c : data) {
+        for (int i = 7; i >= 0; --i) { // MSB -> LSB
+            result.push_back((c & (1 << i)) ? '1' : '0');
+        }
+    }
+    return result;
+}
+// not dealing with this right now
+std::string vectorToBitString(const std::vector<unsigned char>& data) {
+    std::string result;
+    result.reserve(data.size() * 8); // preallocate for efficiency
+    for (unsigned char c : data) {
+        for (int i = 7; i >= 0; --i) { // MSB -> LSB
+            result.push_back((c & (1 << i)) ? '1' : '0');
+        }
+    }
+    return result;
 }
 
 // Main code
@@ -513,9 +534,43 @@ int injected_window_main(){
                         for (const auto& [header, by_len] : by_headers) {
                             for (const auto& [length, details] : by_len) {
                                 ImGui::PushID(imgui_id); imgui_id++;
-                                ImGui::Text("  -> H:%d L:%d | hits: %d | bit_coverage: %f", header, length, details.packets.size(), bit_usage_comp(details.packet_mask));
+                                float bity = bit_usage_comp(details.packet_mask);
+                                ImGui::Text("  -> H:%d L:%d | hits: %d | bit_coverage: %f", header, length, details.packets.size(), bity);
                                 ImGui::SameLine();
-                                if (ImGui::Button("Export"));
+                                if (ImGui::Button("Export")) {
+                                    // first dump our headers
+                                    string output = "Hits:        " + to_string(details.packets.size()) + "\n";
+                                    output       += "Header:      " + to_string(header) + "\n";
+                                    output       += "Length:      " + to_string(length) + "\n";
+                                    output       += "BitCoverage: " + to_string(bity)   + "\n";
+
+                                    output += "\nRAW DUMPS\n";
+                                   
+                                    int ticket = 0;
+                                    for (const auto& curr_packet : details.packets)
+                                        output += to_string(++ticket) + " - " + BufferShortPreview(curr_packet, 0) + "\n";
+                                    
+                                    output += "\nBINARY DUMPS\N";
+                                    // print out bit hit mask here
+                                    output += "bit hit mask: \n";
+                                    int ticker = 0;
+                                    for (int i = 0; i < details.bit_hit_counts.size(); i++) {
+                                        output += to_string(i) + ":" + to_string(details.bit_hit_counts[i]) + " ";
+
+                                        ticker++;
+                                        if (ticker == 8) {
+                                            ticker = 0;
+                                            output += "\n";
+                                        }
+                                    }
+                                    
+                                    // print out the bit mask here
+                                    output += "MASK " + vectorToBitString(details.packet_mask) + "\n";
+                                    for (const auto& curr_packet : details.packets)
+                                        output += to_string(++ticket) + " -   " + vectorToBitString(curr_packet) + "\n";
+
+                                    DumpToNotepad(output);
+                                }
                                 ImGui::PopID();
                             }
                         }
