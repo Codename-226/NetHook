@@ -491,11 +491,6 @@ int injected_window_main(){
                             unsigned char header = loggy->data.ns_send.buffer[0];
                             int p5 = loggy->data.ns_send.param5;
                             int length = loggy->data.ns_send.buffer.size();
-                            //map<unsigned char, map<int, packet_grouping>> by_headers = sorted_packets[p5];
-                            //LogEntry("p5 logger: state 2");
-                            //map<int, packet_grouping> by_length = by_headers[header];
-                            //LogEntry("p5 logger: state 3");
-                            //packet_grouping* packet_grouping = &by_length[length];
                             packet_grouping* packet_grouping = &(sorted_packets[p5][header][length]);
                             //LogEntry("p5 logger: state 4");
 
@@ -531,6 +526,23 @@ int injected_window_main(){
                     int imgui_id = 0;
                     for (const auto& [p5, by_headers] : sorted_packets) {
                         ImGui::Text("- %d", p5);
+                        ImGui::SameLine();
+                        if (ImGui::Button("Export")) {
+                            string output = "test\n";
+
+                            //LogEntry("p5 logger: state 1");
+                            for (const auto loggy : curr_sockey->events) {
+                                if (loggy->type == t_ns_send && loggy->data.ns_send.buffer.size()) {// yeah you're not going to catch me out with null buffers thanks
+                                    unsigned char header = loggy->data.ns_send.buffer[0];
+                                    if (loggy->data.ns_send.param5 == p5) {
+                                        output += "H#:   " + to_string(header) + " - ";
+                                        output += vectorToBitString(loggy->data.ns_send.buffer) + "\n";
+                                    }
+                                }
+                            }
+
+                            DumpToNotepad(output);
+                        }
                         for (const auto& [header, by_len] : by_headers) {
                             for (const auto& [length, details] : by_len) {
                                 ImGui::PushID(imgui_id); imgui_id++;
