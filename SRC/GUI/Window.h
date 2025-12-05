@@ -464,132 +464,140 @@ int injected_window_main(){
         }
         if (show_wrtc_packets_window) {
             if (ImGui::Begin("Web RTC sent packets", &show_wrtc_packets_window, ImGuiWindowFlags_HorizontalScrollbar)) {
-                struct packet_grouping {
-                    // array of all the packets matching this header and size
-                    vector<vector<char>> packets = {};
-                    // OR |= of all packets together
-                    vector<unsigned char> packet_mask = {};
-                    // a hit counter for each bit of the mask (so len = 8 x packet_size)
-                    vector<uint32_t> bit_hit_counts = {};
-                };
-                //  p5,           header,   size,     packets & similarities
-                map<int, map<unsigned char, map<int, packet_grouping>>> sorted_packets = {};
+                try{
+                    struct packet_grouping {
+                        // array of all the packets matching this header and size
+                        vector<vector<char>> packets = {};
+                        // OR |= of all packets together
+                        vector<unsigned char> packet_mask = {};
+                        // a hit counter for each bit of the mask (so len = 8 x packet_size)
+                        vector<uint32_t> bit_hit_counts = {};
+                    };
+                    //  p5,           header,   size,     packets & similarities
+                    map<int, map<unsigned char, map<int, packet_grouping>>> sorted_packets = {};
 
-                //LogEntry("p5 logger: state 0");
-                // very redundant system here, please simplify
-                SocketLogs* curr_sockey = 0;
-                for (const auto pair : logged_sockets) {
-                    if (pair.first == -2) {
-                        curr_sockey = pair.second;
-                        break;
-                    }
-                }
-                if (curr_sockey) {
-                    //LogEntry("p5 logger: state 1");
-                    for (const auto loggy : curr_sockey->events) {
-                        if (loggy->type == t_ns_send && loggy->data.ns_send.buffer.size() ) {// yeah you're not going to catch me out with null buffers thanks
-                            unsigned char header = loggy->data.ns_send.buffer[0];
-                            int p5 = loggy->data.ns_send.param5;
-                            int length = loggy->data.ns_send.buffer.size();
-                            packet_grouping* packet_grouping = &(sorted_packets[p5][header][length]);
-                            //LogEntry("p5 logger: state 4");
-
-                            // check whether grouping needs an init
-                            if (!packet_grouping->packet_mask.size()) {
-                                packet_grouping->packet_mask.assign(length, 0);
-                                packet_grouping->bit_hit_counts.assign(length*8, 0);
-                            }
-                            //LogEntry("p5 logger: state 5");
-
-                            // now add in our packet and map the hits
-                            packet_grouping->packets.push_back(loggy->data.ns_send.buffer);
-                            for (int i = 0; i < loggy->data.ns_send.buffer.size(); i++) {
-                                unsigned char s = (unsigned char)loggy->data.ns_send.buffer[i];
-                                packet_grouping->packet_mask[i] |= s;
-                                packet_grouping->bit_hit_counts[(i*8) + 0] = s & 128;
-                                packet_grouping->bit_hit_counts[(i*8) + 1] = s & 64;
-                                packet_grouping->bit_hit_counts[(i*8) + 2] = s & 32;
-                                packet_grouping->bit_hit_counts[(i*8) + 3] = s & 16;
-                                packet_grouping->bit_hit_counts[(i*8) + 4] = s & 8;
-                                packet_grouping->bit_hit_counts[(i*8) + 5] = s & 4;
-                                packet_grouping->bit_hit_counts[(i*8) + 6] = s & 2;
-                                packet_grouping->bit_hit_counts[(i*8) + 7] = s & 1;
-                            }
+                    //LogEntry("p5 logger: state 0");
+                    // very redundant system here, please simplify
+                    SocketLogs* curr_sockey = 0;
+                    for (const auto pair : logged_sockets) {
+                        if (pair.first == -2) {
+                            curr_sockey = pair.second;
+                            break;
                         }
                     }
-                    
+                    if (curr_sockey) {
+                        //LogEntry("p5 logger: state 1");
+                        for (const auto loggy : curr_sockey->events) {
+                            if (loggy->type == t_ns_send && loggy->data.ns_send.buffer.size()) {// yeah you're not going to catch me out with null buffers thanks
+                                unsigned char header = loggy->data.ns_send.buffer[0];
+                                int p5 = loggy->data.ns_send.param5;
+                                int length = loggy->data.ns_send.buffer.size();
+                                packet_grouping* packet_grouping = &(sorted_packets[p5][header][length]);
+                                //LogEntry("p5 logger: state 4");
 
+                                // check whether grouping needs an init
+                                if (!packet_grouping->packet_mask.size()) {
+                                    packet_grouping->packet_mask.assign(length, 0);
+                                    packet_grouping->bit_hit_counts.assign(length * 8, 0);
+                                }
+                                //LogEntry("p5 logger: state 5");
 
-
-                   // LogEntry("p5 logger: state 6");
-                    ImGui::Text("p5");
-                    int imgui_id = 0;
-                    for (const auto& [p5, by_headers] : sorted_packets) {
-                        ImGui::Text("- %d", p5);
-                        ImGui::SameLine();
-                        if (ImGui::Button("Export")) {
-                            string output = "test\n";
-
-                            //LogEntry("p5 logger: state 1");
-                            for (const auto loggy : curr_sockey->events) {
-                                if (loggy->type == t_ns_send && loggy->data.ns_send.buffer.size()) {// yeah you're not going to catch me out with null buffers thanks
-                                    unsigned char header = loggy->data.ns_send.buffer[0];
-                                    if (loggy->data.ns_send.param5 == p5) {
-                                        output += "H#:   " + to_string(header) + " - ";
-                                        output += vectorToBitString(loggy->data.ns_send.buffer) + "\n";
-                                    }
+                                // now add in our packet and map the hits
+                                packet_grouping->packets.push_back(loggy->data.ns_send.buffer);
+                                for (int i = 0; i < loggy->data.ns_send.buffer.size(); i++) {
+                                    unsigned char s = (unsigned char)loggy->data.ns_send.buffer[i];
+                                    packet_grouping->packet_mask[i] |= s;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 0] = s & 128;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 1] = s & 64;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 2] = s & 32;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 3] = s & 16;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 4] = s & 8;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 5] = s & 4;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 6] = s & 2;
+                                    packet_grouping->bit_hit_counts[(i * 8) + 7] = s & 1;
                                 }
                             }
-
-                            DumpToNotepad(output);
                         }
-                        for (const auto& [header, by_len] : by_headers) {
-                            for (const auto& [length, details] : by_len) {
-                                ImGui::PushID(imgui_id); imgui_id++;
-                                float bity = bit_usage_comp(details.packet_mask);
-                                ImGui::Text("  -> H:%d L:%d | hits: %d | bit_coverage: %f", header, length, details.packets.size(), bity);
-                                ImGui::SameLine();
-                                if (ImGui::Button("Export")) {
-                                    // first dump our headers
-                                    string output = "Hits:        " + to_string(details.packets.size()) + "\n";
-                                    output       += "Header:      " + to_string(header) + "\n";
-                                    output       += "Length:      " + to_string(length) + "\n";
-                                    output       += "BitCoverage: " + to_string(bity)   + "\n";
 
-                                    output += "\nRAW DUMPS\n";
-                                   
-                                    int ticket = 0;
-                                    for (const auto& curr_packet : details.packets)
-                                        output += to_string(++ticket) + " - " + BufferShortPreview(curr_packet, 0) + "\n";
-                                    
-                                    output += "\nBINARY DUMPS\N";
-                                    // print out bit hit mask here
-                                    output += "bit hit mask: \n";
-                                    int ticker = 0;
-                                    for (int i = 0; i < details.bit_hit_counts.size(); i++) {
-                                        output += to_string(i) + ":" + to_string(details.bit_hit_counts[i]) + " ";
 
-                                        ticker++;
-                                        if (ticker == 8) {
-                                            ticker = 0;
-                                            output += "\n";
+
+
+                        // LogEntry("p5 logger: state 6");
+                        ImGui::Text("p5");
+                        int imgui_id_ = 0;
+                        int imgui_id = 0;
+                        for (const auto& [p5, by_headers] : sorted_packets) {
+                            ImGui::Text("- %d", p5);
+                            ImGui::SameLine();
+                            ImGui::PushID(imgui_id_++);
+                            if (ImGui::Button("Export")) {
+                                string output = "test\n";
+
+                                //LogEntry("p5 logger: state 1");
+                                for (const auto loggy : curr_sockey->events) {
+                                    if (loggy->type == t_ns_send && loggy->data.ns_send.buffer.size()) {// yeah you're not going to catch me out with null buffers thanks
+                                        unsigned char header = loggy->data.ns_send.buffer[0];
+                                        if (loggy->data.ns_send.param5 == p5) {
+                                            output += "H#:   " + to_string(header) + " - ";
+                                            output += vectorToBitString(loggy->data.ns_send.buffer) + "\n";
                                         }
                                     }
-                                    
-                                    // print out the bit mask here
-                                    output += "MASK " + vectorToBitString(details.packet_mask) + "\n";
-                                    for (const auto& curr_packet : details.packets)
-                                        output += to_string(++ticket) + " -   " + vectorToBitString(curr_packet) + "\n";
-
-                                    DumpToNotepad(output);
                                 }
-                                ImGui::PopID();
+
+                                DumpToNotepad(output);
                             }
+                            for (const auto& [header, by_len] : by_headers) {
+                                for (const auto& [length, details] : by_len) {
+                                    ImGui::PushID(imgui_id); imgui_id++;
+                                    float bity = bit_usage_comp(details.packet_mask);
+                                    ImGui::Text("  -> H:%d L:%d | hits: %d | bit_coverage: %f", header, length, details.packets.size(), bity);
+                                    ImGui::SameLine();
+                                    if (ImGui::Button("Export")) {
+                                        // first dump our headers
+                                        string output = "Hits:        " + to_string(details.packets.size()) + "\n";
+                                        output += "Header:      " + to_string(header) + "\n";
+                                        output += "Length:      " + to_string(length) + "\n";
+                                        output += "BitCoverage: " + to_string(bity) + "\n";
+
+                                        output += "\nRAW DUMPS\n";
+
+                                        int ticket = 0;
+                                        for (const auto& curr_packet : details.packets)
+                                            output += to_string(++ticket) + " - " + BufferShortPreview(curr_packet, 0) + "\n";
+
+                                        output += "\nBINARY DUMPS\N";
+                                        // print out bit hit mask here
+                                        output += "bit hit mask: \n";
+                                        int ticker = 0;
+                                        for (int i = 0; i < details.bit_hit_counts.size(); i++) {
+                                            output += to_string(i) + ":" + to_string(details.bit_hit_counts[i]) + " ";
+
+                                            ticker++;
+                                            if (ticker == 8) {
+                                                ticker = 0;
+                                                output += "\n";
+                                            }
+                                        }
+
+                                        // print out the bit mask here
+                                        output += "MASK " + vectorToBitString(details.packet_mask) + "\n";
+                                        for (const auto& curr_packet : details.packets)
+                                            output += to_string(++ticket) + " -   " + vectorToBitString(curr_packet) + "\n";
+
+                                        DumpToNotepad(output);
+                                    }
+                                    ImGui::PopID();
+                                }
+                            }
+                            ImGui::PopID();
                         }
                     }
                     //LogEntry("p5 logger: state 7");
                 }
-
+                catch (std::exception ex) {
+                    LogEntry(ex.what(), t_error_log);
+                    show_wrtc_packets_window = false;
+                }
 
 
 
