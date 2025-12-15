@@ -33,6 +33,7 @@ enum socket_event_type {
 	// MCC simplenetwork stuff
 	t_ns_send = 0x01000000,
 	//t_wrtc_create_peer_connection = 0x02000000,
+	t_wrtc_recv = 0x02000000,
 	t_wrtc_send = 0x04000000,
 	t_signal_send = 0x08000000,
 	t_signal_recv = 0x10000000,

@@ -48,6 +48,27 @@ void* hooked_ns_send(void* session, char* packet, unsigned long long packet_size
     return result;
 }
 
+typedef void* (*wrtc_recv_func)(void* param_1, void* param_2, char* cpy_src, long long siz);
+wrtc_recv_func wrtc_recv_ptr = NULL;
+void* hooked_wrtc_recv(void* param_1, void* param_2, char* cpy_src, long long siz) {
+    //LogEntry("hooked_wrtc_recv1()", t_generic_log);
+    auto result = wrtc_recv_ptr(param_1, param_2, cpy_src, siz);
+
+    SocketLogs* log;
+    auto event = LogSocketEvent(-2, t_wrtc_recv, "wrtc_recv()", &log, 0);
+
+    event->wrtc_recv.buffer = vector<char>(cpy_src, cpy_src + siz);
+
+
+    log->recvfrom_log.log(siz);
+    log->total_recv_log.log(siz);
+
+    // do not log IO transaction
+    LogParamsEntry("wrtc_recv()", {}, t_wrtc_recv);
+    return result;
+}
+
+
 typedef void* (*wrtc_send_func)(void* param_1, char* buffer_struct);
 wrtc_send_func wrtc_send_ptr = NULL;
 void* hooked_wrtc_send(void* param_1, char* buffer_struct) {
@@ -145,6 +166,9 @@ bool LoadHooks_MCC_Webrtc() {
 
     if (!HookMacro(((char*)simplenetworkbase + 0x0D3768), &hooked_signal_recv, &signal_recv_ptr)) return false;
     LogParamsEntry("signal_recv hooked", { {"signal_recv ptr", (uint64_t)simplenetworkbase + 0x0D3768} }, t_generic_log);
+
+    if (!HookMacro(((char*)simplenetworkbase + 0x2013E0), &hooked_wrtc_recv, &wrtc_recv_ptr)) return false;
+    LogParamsEntry("wrtc_recv hooked", { {"wrtc_recv ptr", (uint64_t)simplenetworkbase + 0x2013E0} }, t_generic_log);
 
 
     return true;

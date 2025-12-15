@@ -322,6 +322,10 @@ class socentry_mcc_wrtc_send {
 public:
 	vector<char> buffer;
 };
+class socentry_mcc_wrtc_recv {
+public:
+	vector<char> buffer;
+};
 class socentry_mcc_signal_send {
 public:
 	char code;
@@ -438,6 +442,7 @@ public:
 
 		socentry_mcc_ns_send ns_send;
 		socentry_mcc_wrtc_send wrtc_send;
+		socentry_mcc_wrtc_recv wrtc_recv;
 		socentry_mcc_signal_send signal_send;
 		socentry_mcc_signal_recv signal_recv;
 	};
@@ -567,7 +572,7 @@ public:
 	IOLog wsasendmsg_log = {};
 
 	IOLog recv_log = {};		// also HTTP read			| also signal_recv
-	IOLog recvfrom_log = {};	// also HTTP query headers	|
+	IOLog recvfrom_log = {};	// also HTTP query headers	| also wrtc_recv
 	IOLog wsarecv_log = {};
 	IOLog wsarecvfrom_log = {};
 
@@ -667,6 +672,7 @@ socket_log_entry_data* LogSocketEvent(SOCKET s, socket_event_type type, const ch
 		new_socket_event->category = c_send;
 		break;
 	case t_signal_recv:
+	case t_wrtc_recv:
 		new_socket_event->category = c_recieve;
 		break;
 	}

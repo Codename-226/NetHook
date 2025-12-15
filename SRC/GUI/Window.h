@@ -385,6 +385,7 @@ int injected_window_main(){
                     displayLogFilter("Exclude Connect", t_connect);
                     displayLogFilter("Exclude NetworkSessionSend", t_ns_send);
                     displayLogFilter("Exclude WRTCDataChannelSend", t_wrtc_send);
+                    displayLogFilter("Exclude WRTCDataChannelRecv", t_wrtc_recv);
                     displayLogFilter("Exclude SignalSend", t_signal_send);
                     displayLogFilter("Exclude SignalRecv", t_signal_recv);
 
@@ -475,6 +476,7 @@ int injected_window_main(){
                     };
                     //  p5,           header,   size,     packets & similarities
                     map<int, map<unsigned char, map<int, packet_grouping>>> sorted_packets = {};
+                    map<int, vector<vector<char>>> recieved_packets = {};
 
                     //LogEntry("p5 logger: state 0");
                     // very redundant system here, please simplify
@@ -517,6 +519,20 @@ int injected_window_main(){
                                     packet_grouping->bit_hit_counts[(i * 8) + 7] = s & 1;
                                 }
                             }
+                            else if (loggy->type == t_wrtc_recv && loggy->data.wrtc_recv.buffer.size()) {
+                                int channel = -1; 
+                                int sizle = loggy->data.wrtc_recv.buffer.size();
+                                if (sizle > 4) {
+                                    channel = 0;
+                                    channel |= ((int)(unsigned char)loggy->data.wrtc_recv.buffer[sizle - 4]);
+                                    channel |= ((int)(unsigned char)loggy->data.wrtc_recv.buffer[sizle - 3]) << 8;
+                                    channel |= ((int)(unsigned char)loggy->data.wrtc_recv.buffer[sizle - 2]) << 16;
+                                    channel |= ((int)(unsigned char)loggy->data.wrtc_recv.buffer[sizle - 1]) << 24;
+
+                                    recieved_packets[channel].push_back(std::vector<char>(loggy->data.wrtc_recv.buffer.begin(), loggy->data.wrtc_recv.buffer.end() - 4));
+                                } 
+                                else recieved_packets[channel].push_back(loggy->data.wrtc_recv.buffer);
+                            }
                         }
 
 
@@ -524,6 +540,29 @@ int injected_window_main(){
 
                         // LogEntry("p5 logger: state 6");
                         ImGui::Text("p5");
+                        ImGui::Text("packets recieved %d", recieved_packets.size());
+                        ImGui::SameLine();
+                        if (ImGui::Button("pExport")) {
+
+                            string output = "test12\n";
+
+                            for (const auto& curr_packet : recieved_packets) {
+                                output += "\n\nheader - " + to_string(curr_packet.first) + "\n";
+                                int ticket = 0;
+                                for (const auto& test : curr_packet.second)
+                                    output += to_string(ticket++) + " - " + BufferShortPreview(test, 0) + "\n";
+                            }
+
+                            output += "binaries\n";
+                            for (const auto& curr_packet : recieved_packets) {
+                                output += "\n\nheader - " + to_string(curr_packet.first) + "\n";
+                                int ticket = 0;
+                                for (const auto& test : curr_packet.second)
+                                    output += to_string(ticket++) + " - " + vectorToBitString(test) + "\n";
+                            }
+
+                            DumpToNotepad(output);
+                        }
                         int imgui_id_ = 0;
                         int imgui_id = 0;
                         for (const auto& [p5, by_headers] : sorted_packets) {
@@ -1150,6 +1189,7 @@ int injected_window_main(){
                                     case t_connect:                  ImGui::Text("(Connect)           "); break;
                                     case t_ns_send:                  ImGui::Text("(NetworkSessionSend)"); break;
                                     case t_wrtc_send:                ImGui::Text("(RTCDataChannelSend)"); break;
+                                    case t_wrtc_recv:                ImGui::Text("(RTCDataChannelRecv)"); break;
                                     case t_signal_send:              ImGui::Text("(SignallingSend)    "); break;
                                     case t_signal_recv:              ImGui::Text("(SignallingRecieve) "); break;
                                     }
@@ -1210,6 +1250,7 @@ int injected_window_main(){
                                     case t_connect:                  ImGui::Text("(Connect)");            break;
                                     case t_ns_send:                  ImGui::Text("(NetworkSessionSend)"); break;
                                     case t_wrtc_send:                ImGui::Text("(RTCDataChannelSend)"); break;
+                                    case t_wrtc_recv:                ImGui::Text("(RTCDataChannelRecv)"); break;
                                     case t_signal_send:              ImGui::Text("(SignallingSend)");     break;
                                     case t_signal_recv:              ImGui::Text("(SignallingRecieve)");  break;
                                     }
@@ -1504,6 +1545,10 @@ int injected_window_main(){
                                     case t_wrtc_send: {
                                         ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.wrtc_send.buffer.size(), BufferShortPreview(curr_loggy->data.wrtc_send.buffer).c_str());
                                         if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wrtc_send.buffer, 0)); }
+                                        break;}
+                                    case t_wrtc_recv: {
+                                        ImGui::Text("data: 0x%llx [%s]", curr_loggy->data.wrtc_recv.buffer.size(), BufferShortPreview(curr_loggy->data.wrtc_recv.buffer).c_str());
+                                        if (ImGui::Button("Copy")) { CopyToClipboard(BufferShortPreview(curr_loggy->data.wrtc_recv.buffer, 0)); }
                                         break;}
                                     case t_signal_send: {
                                         ImGui::Text("code: 0x%x", (int)curr_loggy->data.signal_send.code);
