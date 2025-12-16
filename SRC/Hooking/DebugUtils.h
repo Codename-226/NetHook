@@ -5,6 +5,7 @@
 
 std::vector<HANDLE> suspended_threads = {}; // ResumeThread(hThread);
 bool is_process_suspended = false;
+static bool force_get_socket_id = false;
 
 
 typedef NTSTATUS(NTAPI* NtGetNextThread_t)(
@@ -136,49 +137,100 @@ void ResumeProcess() {
 }
 
 
+
+__addr convert_addr_struct(sockaddr* addr) {
+    __addr thingo = {};
+    if (!addr) return thingo;
+    char str[INET6_ADDRSTRLEN];  // 46 bytes
+    if (addr->sa_family == AF_INET) {
+        sockaddr_in* ipv4 = (sockaddr_in*)addr;
+        thingo.sin_family = ipv4->sin_family;
+        thingo.sin_port = ipv4->sin_port;
+        thingo.IP = inet_ntop(AF_INET, &ipv4->sin_addr, str, INET_ADDRSTRLEN);
+    }
+    else if (addr->sa_family == AF_INET6) {
+        sockaddr_in6* ipv6 = (sockaddr_in6*)addr;
+        thingo.sin_family = ipv6->sin6_family;
+        thingo.sin_port = ipv6->sin6_port;
+        thingo.sin6_flowinfo = ipv6->sin6_flowinfo;
+        thingo.sin6_scope_id = ipv6->sin6_scope_id;
+        thingo.IP = inet_ntop(AF_INET6, &ipv6->sin6_addr, str, INET6_ADDRSTRLEN);
+    }
+    return thingo;
+}
+bool try_name_log_from_address(string IP, SocketLogs* log) {
+    // and now we can apply a name to our socket
+    string socket_source_name = CheckHost(IP);
+    if (!socket_source_name.empty()) {
+        size_t len = socket_source_name.size();
+        if (len < sizeof(log->custom_label)) {
+            memcpy(log->custom_label, socket_source_name.c_str(), len + 1); // include null terminator
+        }
+        else {
+            // Truncate safely and null-terminate
+            memcpy(log->custom_label, socket_source_name.c_str(), sizeof(log->custom_label) - 1);
+            log->custom_label[sizeof(log->custom_label) - 1] = '\0';
+        }
+        return true;
+    }
+    return false;
+}
+
+
+bool SockenJockey(bool b, SOCKET s, SocketLogs* logs) {
+
+    sockaddr_storage addr; // Use sockaddr_storage for IPv4/IPv6 flexibility
+    int addr_len = sizeof(addr);
+
+    if (!getpeername(s, (sockaddr*)(&addr), &addr_len)) {
+
+        auto var = convert_addr_struct((sockaddr*)(&addr)).IP;
+        if (!b) {
+        dont_resolve:
+            // screw it, we can make a function for this some other time.
+            int name_len = var.size();
+            if (name_len > sizeof(logs->custom_label)) name_len = sizeof(logs->custom_label) - 1;
+            memcpy(logs->custom_label, var.c_str(), name_len);
+            logs->custom_label[name_len] = '\0';
+            return true;
+        }
+        else {
+            if (try_name_log_from_address(var, logs)) {
+                LogParamsEntry("resolved socket IP and found cached hostname", { { var.c_str(),0} }, t_generic_log);
+                return true;
+            }
+            else { // we try to get hostname
+                char hostname[NI_MAXHOST] = {};
+                char servname[NI_MAXSERV] = {};
+                if (!getnameinfo((sockaddr*)(&addr), addr_len, hostname, sizeof(hostname), servname, sizeof(servname), NI_NUMERICSERV)) {
+                    LogParamsEntry("resolved socket hostname", { { hostname,0}, {servname,0} }, t_generic_log);
+                    int name_len = strlen(hostname);
+                    if (name_len > sizeof(logs->custom_label)) name_len = sizeof(logs->custom_label) - 1;
+
+                    memcpy(logs->custom_label, hostname, name_len);
+                    logs->custom_label[name_len] = '\0';
+                    return true;
+                }
+                else goto dont_resolve;
+            }
+        }
+    }
+}
+
 void TryWriteSocketAddresses(bool resolve_address_to_hostname) {
     int total_valid = 0;
     int total_success = 0;
     for (const auto& [sock, logs] : logged_sockets) {
         if (logs && logs->source_type == st_Socket) {
             total_valid++;
-            
-            sockaddr_storage addr; // Use sockaddr_storage for IPv4/IPv6 flexibility
-            int addr_len = sizeof(addr);
-
-            if (!getpeername(sock, (sockaddr*)(&addr), &addr_len)) {
-
-                auto var = convert_addr_struct((sockaddr*)(&addr)).IP;
-                if (!resolve_address_to_hostname) {
-                dont_resolve:
-                    // screw it, we can make a function for this some other time.
-                    int name_len = var.size();
-                    if (name_len > sizeof(logs->custom_label)) name_len = sizeof(logs->custom_label) - 1;
-                    memcpy(logs->custom_label, var.c_str(), name_len);
-                    logs->custom_label[name_len] = '\0';
-                    total_success++;
-                } else {
-                    if (try_name_log_from_address(var, logs)) {
-                        LogParamsEntry("resolved socket IP and found cached hostname", { { var.c_str(),0} }, t_generic_log);
-                        total_success++;
-                    } else { // we try to get hostname
-                        char hostname[NI_MAXHOST] = {};
-                        char servname[NI_MAXSERV] = {};
-                        if (!getnameinfo((sockaddr*)(&addr), addr_len, hostname, sizeof(hostname), servname, sizeof(servname), NI_NUMERICSERV)) {
-                            LogParamsEntry("resolved socket hostname", { { hostname,0}, {servname,0} }, t_generic_log);
-                            int name_len = strlen(hostname);
-                            if (name_len > sizeof(logs->custom_label)) name_len = sizeof(logs->custom_label) - 1;
-
-                            memcpy(logs->custom_label, hostname, name_len);
-                            logs->custom_label[name_len] = '\0';
-                            total_success++;
-                        } else goto dont_resolve;
-                    }
-                }
-            }
+            total_success += SockenJockey(resolve_address_to_hostname, sock, logs);
         }
     }
     LogParamsEntry("socket names have been set to their addresses", { { "total sockets", (uint64_t)total_valid}, {"succeeded", (uint64_t)total_success}}, t_generic_log);
+}
+void check_resolve_sockey(SOCKET s, SocketLogs* logs) {
+    if (force_get_socket_id)
+        SockenJockey(true, s, logs);
 }
 
 bool CopyToClipboard(const std::string& text) {

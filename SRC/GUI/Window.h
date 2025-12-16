@@ -436,6 +436,8 @@ int injected_window_main(){
                     TryWriteSocketAddresses(false);
                 if (ImGui::MenuItem("Try map all socket hostnames", nullptr, nullptr))
                     TryWriteSocketAddresses(true);
+                if (ImGui::MenuItem("Force get IP", nullptr, nullptr))
+                    force_get_socket_id = !force_get_socket_id;
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();

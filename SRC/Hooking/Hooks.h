@@ -15,44 +15,6 @@ inline bool HookMacro(LPVOID src_func, LPVOID override_func, T** src_func_call_p
 }
 
 
-__addr convert_addr_struct(sockaddr* addr) {
-    __addr thingo = {};
-    if (!addr) return thingo;
-    char str[INET6_ADDRSTRLEN];  // 46 bytes
-    if (addr->sa_family == AF_INET) {
-        sockaddr_in* ipv4 = (sockaddr_in*)addr;
-        thingo.sin_family = ipv4->sin_family;
-        thingo.sin_port = ipv4->sin_port;
-        thingo.IP = inet_ntop(AF_INET, &ipv4->sin_addr, str, INET_ADDRSTRLEN);
-    }
-    else if (addr->sa_family == AF_INET6) {
-        sockaddr_in6* ipv6 = (sockaddr_in6*)addr;
-        thingo.sin_family = ipv6->sin6_family;
-        thingo.sin_port = ipv6->sin6_port;
-        thingo.sin6_flowinfo = ipv6->sin6_flowinfo;
-        thingo.sin6_scope_id = ipv6->sin6_scope_id;
-        thingo.IP = inet_ntop(AF_INET6, &ipv6->sin6_addr, str, INET6_ADDRSTRLEN);
-    }
-    return thingo;
-}
-bool try_name_log_from_address(string IP, SocketLogs* log) {
-    // and now we can apply a name to our socket
-    string socket_source_name = CheckHost(IP);
-    if (!socket_source_name.empty()) {
-        size_t len = socket_source_name.size();
-        if (len < sizeof(log->custom_label)) {
-            memcpy(log->custom_label, socket_source_name.c_str(), len + 1); // include null terminator
-        }
-        else {
-            // Truncate safely and null-terminate
-            memcpy(log->custom_label, socket_source_name.c_str(), sizeof(log->custom_label) - 1);
-            log->custom_label[sizeof(log->custom_label) - 1] = '\0';
-        }
-        return true;
-    }
-    return false;
-}
-
 typedef int (WSAAPI* send_func)(SOCKET, const char*, int, int);
 send_func send_func_ptr = NULL;
 int WSAAPI hooked_send(SOCKET s, const char* buf, int len, int flags) {
@@ -60,6 +22,7 @@ int WSAAPI hooked_send(SOCKET s, const char* buf, int len, int flags) {
     int actual_bytes_sent = var==SOCKET_ERROR ? 0:var;
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_send, "send()", &log, var==SOCKET_ERROR ? WSAGetLastError():0);
+    check_resolve_sockey(s, log);
     log->send_log.log(actual_bytes_sent);
     log->total_send_log.log(actual_bytes_sent);
     global_io_send_log.log(actual_bytes_sent);
@@ -112,6 +75,7 @@ int hooked_WSAsend(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lp
 
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_wsa_send, "wsasend()", &log, var==SOCKET_ERROR ? WSAGetLastError():0);
+    check_resolve_sockey(s, log);
     if (lpNumberOfBytesSent)
         event->wsasend.bytes_sent = *lpNumberOfBytesSent;
     else event->wsasend.bytes_sent = 0;
@@ -237,6 +201,7 @@ int hooked_recv(SOCKET s, char* buf, int len, int flags) {
     
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_recv, "recv()", &log, len_recieved==SOCKET_ERROR ? WSAGetLastError():0);
+    check_resolve_sockey(s, log);
     
     int actual_bytes_recieved = len_recieved>=0 ? len_recieved:0;
     event->recv.flags = flags;
@@ -284,6 +249,7 @@ int hooked_wsa_recv(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD l
 
     SocketLogs* log;
     auto event = LogSocketEvent(s, t_wsa_recv, "wsa_recv()", &log, error==SOCKET_ERROR ? WSAGetLastError():0);
+    check_resolve_sockey(s, log);
 
     event->wsarecv.flags = in_flags;
     if (lpFlags)

@@ -29,8 +29,8 @@ using namespace std;
 #include "Loggers/PerformanceLog.h"
 #include "Loggers/SocketLog.h"
 #include "Loggers/HTTPLog.h";
-#include "Hooking/Hooks.h"
 #include "Hooking/DebugUtils.h"
+#include "Hooking/Hooks.h"
 
 #include "GUI/Window.h"
 #include "SaveState.h"
